@@ -1,3 +1,4 @@
-[submodule "submodules/scenario_runner"]
-	path = submodules/scenario_runner
+[submodule "third_party/scenario_runner"]
+	path = third_party/scenario_runner
 	url = https://github.com/carla-simulator/scenario_runner.git
+	ignore = dirty
