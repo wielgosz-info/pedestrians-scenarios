@@ -3,6 +3,9 @@ FROM wielgoszinfo/pedestrians-common:${PLATFORM}-latest AS base
 
 ENV PACKAGE=pedestrians-scenarios
 
+# Copy the 'agents' package used by scenario runner. It is a part of provided PythonAPI, but not a part of carla package.
+COPY --from=carlasim/carla:0.9.13 --chown=${USERNAME}:${USERNAME} /home/carla/PythonAPI/carla/agents /venv/lib/python3.8/site-packages/agents
+
 # Install direct dependencies and scenario_runner ones
 RUN /venv/bin/python -m pip install --no-cache-dir \
     carla==0.9.13 \
@@ -23,3 +26,5 @@ RUN /venv/bin/python -m pip install --no-cache-dir \
 
 # Copy client files so that we can do editable pip install
 COPY --chown=${USERNAME}:${USERNAME} . /app
+
+ENV SCENARIO_RUNNER_ROOT=/app/third_party/scenario_runner
