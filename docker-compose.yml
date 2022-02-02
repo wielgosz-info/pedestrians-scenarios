@@ -19,6 +19,8 @@ services:
       - vscode:/home/carla/.vscode-server
       - vscode-insiders:/home/carla/.vscode-server-insiders
       - outputs:/outputs
+    environment:
+      COMMIT: ${COMMIT}
     shm_size: ${SHM_SIZE:-2gb}
     depends_on:
       - server
