@@ -1,34 +1,10 @@
-"""
-This is a skeleton file that can serve as a starting point for a Python
-console script. To run this script uncomment the following lines in the
-``[options.entry_points]`` section in ``setup.cfg``::
-
-    console_scripts =
-         fibonacci = pedestrians_scenarios.skeleton:run
-
-Then run ``pip install .`` (or ``pip install -e .`` for editable mode)
-which will install the command ``fibonacci`` inside your current environment.
-
-Besides console scripts, the header (i.e. until ``_logger``...) of this file can
-also be used as template for Python modules.
-
-Note:
-    This skeleton file can be safely removed if not needed!
-
-References:
-    - https://setuptools.readthedocs.io/en/latest/userguide/entry_point.html
-    - https://pip.pypa.io/en/stable/reference/pip_install
-"""
-
 import argparse
 import logging
 import sys
 
 from pedestrians_scenarios import __version__
-
-__author__ = "Maciej Wielgosz"
-__copyright__ = "Maciej Wielgosz"
-__license__ = "MIT"
+import pedestrians_scenarios.karma as km
+from pedestrians_scenarios.third_party.srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 
 _logger = logging.getLogger(__name__)
 
@@ -39,15 +15,11 @@ _logger = logging.getLogger(__name__)
 # executable/script.
 
 
-def parse_args(args):
-    """Parse command line parameters
-
-    Args:
-      args (List[str]): command line parameters as list of strings
-          (for example  ``["--help"]``).
+def add_cli_args():
+    """Prepares command line parameters.
 
     Returns:
-      :obj:`argparse.Namespace`: command line parameters namespace
+      :parser:`argparse.ArgumentParser`
     """
     parser = argparse.ArgumentParser(description="Just a Fibonacci demonstration")
     parser.add_argument(
@@ -55,7 +27,6 @@ def parse_args(args):
         action="version",
         version="pedestrians-scenarios {ver}".format(ver=__version__),
     )
-    parser.add_argument(dest="n", help="n-th Fibonacci number", type=int, metavar="INT")
     parser.add_argument(
         "-v",
         "--verbose",
@@ -72,7 +43,7 @@ def parse_args(args):
         action="store_const",
         const=logging.DEBUG,
     )
-    return parser.parse_args(args)
+    return parser
 
 
 def setup_logging(loglevel):
@@ -88,8 +59,23 @@ def setup_logging(loglevel):
 
 
 def main(args):
-    args = parse_args(args)
+    parser = add_cli_args()
+    km.Karma.add_cli_args(parser)
+
+    args = parser.parse_args(args)
+    kwargs = vars(args)
     setup_logging(args.loglevel)
+
+    with km.Karma(**kwargs) as karma:
+        pedestrian = km.Actor(
+            model='walker.pedestrian.0001', spawn_point=None,
+            random_location=True, actor_category='pedestrian'
+        )
+        karma.world.tick()
+
+        pedestrian_transform = pedestrian.get_transform()
+
+        print(pedestrian_transform)
 
 
 def run():
@@ -109,6 +95,6 @@ if __name__ == "__main__":
     # After installing your project with pip, users can also run your Python
     # modules as scripts via the ``-m`` flag, as defined in PEP 338::
     #
-    #     python -m pedestrians_scenarios.skeleton 42
+    #     python -m pedestrians_scenarios.skeleton
     #
     run()

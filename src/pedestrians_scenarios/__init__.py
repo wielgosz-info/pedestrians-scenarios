@@ -14,3 +14,9 @@ except PackageNotFoundError:  # pragma: no cover
     __version__ = "unknown"
 finally:
     del version, PackageNotFoundError
+
+import sys
+
+__author__ = "Maciej Wielgosz"
+__copyright__ = "Maciej Wielgosz"
+__license__ = "MIT"
