@@ -1,9 +1,18 @@
 import argparse
-from time import time
+import os
+import time
+from enum import Enum, auto
+from typing import Callable
 
 import carla
 
 from .karma_data_provider import KarmaDataProvider
+
+
+class KarmaStage(Enum):
+    tick = auto()  # a new snapshot is received from the CARLA server
+    close = auto()  # Karma is asked to close
+    reload = auto()  # CARLA world is reloaded
 
 
 class Karma(object):
@@ -30,6 +39,7 @@ class Karma(object):
         seed=22752,
         fps=30.0,
         hybrid_physics_mode=False,
+        outputs_dir=None,
         **kwargs
     ) -> None:
         self.__timeout = timeout
@@ -37,7 +47,18 @@ class Karma(object):
         self.__fps = fps
         self.__hybrid_physics_mode = hybrid_physics_mode
 
+        if outputs_dir is None:
+            outputs_dir = os.path.join(os.getcwd(), 'outputs')
+        self.__outputs_dir = outputs_dir
+        os.makedirs(self.__outputs_dir, exist_ok=True)
+
         self.__on_tick_callback_id = None
+
+        self.__next_callback_id = 0
+        self.__registered_callbacks = {
+            event_type: {}
+            for event_type in KarmaStage
+        }
 
         self.__client = carla.Client(host, port)
         self.__client.set_timeout(self.__timeout)
@@ -69,6 +90,8 @@ class Karma(object):
                                help='FPS of the simulation (default: 30)')
         subparser.add_argument('--hybrid-physics-mode', default=False, action='store_true',
                                help='Enable hybrid physics mode (default: False)')
+        subparser.add_argument('--outputs-dir', default=None, type=str,
+                               help='Directory to store outputs (default: outputs)')
 
         return parser
 
@@ -79,6 +102,10 @@ class Karma(object):
         self.close()
 
         return False
+
+    @property
+    def outputs_dir(self) -> str:
+        return self.__outputs_dir
 
     def tick(self) -> int:
         return self.__world.tick()
@@ -123,8 +150,19 @@ class Karma(object):
 
         self.__on_tick_callback_id = self.__world.on_tick(self.on_carla_tick)
 
+        for callback in self.__registered_callbacks[KarmaStage.reload].copy().values():
+            callback()
+
     def close(self):
         KarmaDataProvider.cleanup()
+
+        # are there any registered tick callbacks?
+        # if so, give them a chance to complete
+        if len(self.__registered_callbacks[KarmaStage.tick]) > 0:
+            time.sleep(1)
+
+        for callback in self.__registered_callbacks[KarmaStage.close].copy().values():
+            callback()
 
         if self.__world:
             self.__world.remove_on_tick(self.__on_tick_callback_id)
@@ -137,3 +175,24 @@ class Karma(object):
 
     def on_carla_tick(self, snapshot: carla.WorldSnapshot):
         KarmaDataProvider.on_carla_tick(snapshot)
+
+        for callback in self.__registered_callbacks[KarmaStage.tick].values():
+            callback()
+
+    def register_callback(self, stage: KarmaStage, callback: Callable[[], None]) -> int:
+        """
+        Registers a callback to be called at specific life-cycle stage.
+        """
+        callback_id = self.__next_callback_id
+        self.__next_callback_id += 1
+        self.__registered_callbacks[stage][callback_id] = callback
+        return callback_id
+
+    def unregister_callback(self, callback_id: int) -> None:
+        """
+        Unregisters a callback previously registered with register_callback.
+        """
+        for event_type in self.__registered_callbacks:
+            if callback_id in self.__registered_callbacks[event_type]:
+                del self.__registered_callbacks[event_type][callback_id]
+                return

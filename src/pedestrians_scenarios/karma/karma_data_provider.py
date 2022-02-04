@@ -60,7 +60,7 @@ class KarmaDataProvider(CarlaDataProvider):
         return shifted_waypoint
 
     @staticmethod
-    def request_new_sensor(blueprint: carla.ActorBlueprint, spawn_point: carla.Transform, tick: bool = True) -> carla.Sensor:
+    def request_new_sensor(blueprint: carla.ActorBlueprint, spawn_point: carla.Transform, tick: bool = True, **kwargs) -> carla.Sensor:
         """
         Spawns a sensor at the given transform and registers its data queue.
         Very similar to CarlaDataProvider.request_new_actor.
@@ -81,14 +81,18 @@ class KarmaDataProvider(CarlaDataProvider):
             KarmaDataProvider.get_world().wait_for_tick()
 
         KarmaDataProvider._sensors_pool[sensor.id] = sensor
-        KarmaDataProvider._sensors_queue[sensor.id] = Queue()
-
-        sensor.listen(KarmaDataProvider._sensors_queue[sensor.id].put)
+        KarmaDataProvider.register_sensor_queue(sensor)
 
         KarmaDataProvider._carla_actor_pool[sensor.id] = sensor
         KarmaDataProvider.register_actor(sensor)
 
         return sensor
+
+    @staticmethod
+    def register_sensor_queue(sensor):
+        if sensor.id not in KarmaDataProvider._sensors_queue:
+            KarmaDataProvider._sensors_queue[sensor.id] = Queue()
+            sensor.listen(KarmaDataProvider._sensors_queue[sensor.id].put)
 
     @staticmethod
     def set_world(world):
@@ -128,7 +132,7 @@ class KarmaDataProvider(CarlaDataProvider):
         world_frame = snapshot.frame
 
         if world_frame:
-            for sensor_id in KarmaDataProvider._sensors_pool.copy():
+            for sensor_id in KarmaDataProvider._sensors_queue.copy():
                 frames = []
                 sensor_data = None
 
