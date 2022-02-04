@@ -17,6 +17,7 @@ class FreeCamera(Actor):
                  image_size: Tuple[int] = (800, 600),
                  fov: float = 90.0,
                  data_failure_mode: Union['none', 'zero', 'noise', 'last'] = 'zero',
+                 **kwargs
                  ):
         camera_location = carla.Location(look_at.transform(carla.Location(*distance)))
         camera_transform = carla_look_at(look_at, camera_location)
@@ -29,14 +30,15 @@ class FreeCamera(Actor):
         camera_bp.set_attribute('fov', str(fov))
 
         self.__image_size = image_size
+        self.__image_shape = (self.__image_size[1], self.__image_size[0], 3)
         camera = KarmaDataProvider.request_new_sensor(
-            camera_bp, camera_transform)
+            camera_bp, camera_transform, **kwargs)
         super().__init__(actor=camera)
 
         self.__data_failure_mode = data_failure_mode
         self.__last_frame = None
         if self.__data_failure_mode == 'last':
-            self.__last_frame = np.zeros((*self.__image_size, 3), dtype=np.uint8)
+            self.__last_frame = np.zeros(self.__image_shape, dtype=np.uint8)
 
     @property
     def image_size(self) -> Tuple[int]:
@@ -63,10 +65,10 @@ class FreeCamera(Actor):
             self.__last_frame = np.array(img)[..., ::-1]
         else:
             if self.__data_failure_mode == 'zero':
-                self.__last_frame = np.zeros((*self.__image_size, 3), dtype=np.uint8)
+                self.__last_frame = np.zeros(self.__image_shape, dtype=np.uint8)
             elif self.__data_failure_mode == 'noise':
                 self.__last_frame = KarmaDataProvider.get_rng().randint(
-                    0, 255, size=(*self.__image_size, 3), dtype=np.uint8)
+                    0, 255, size=self.__image_shape, dtype=np.uint8)
             elif self.__data_failure_mode == 'last':
                 self.__last_frame = self.__last_frame.copy()
             else:

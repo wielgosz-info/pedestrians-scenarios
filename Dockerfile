@@ -5,6 +5,7 @@ ENV PACKAGE=pedestrians-scenarios
 
 # Install direct dependencies and scenario_runner ones
 RUN /venv/bin/python -m pip install --no-cache-dir \
+    av==8.0.3 \
     ephem==4.1.3 \
     matplotlib==3.5.1 \
     networkx==2.2 \
@@ -13,6 +14,7 @@ RUN /venv/bin/python -m pip install --no-cache-dir \
     Pillow==9.0.0 \
     psutil==5.9.0 \
     py-trees==0.8.3 \
+    scipy==1.7.2 \
     Shapely==1.7.1 \
     simple-watchdog-timer==0.1.1 \
     six==1.16.0 \

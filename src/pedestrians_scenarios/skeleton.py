@@ -2,12 +2,14 @@ import argparse
 import logging
 import sys
 import os
+import av
 
 from pedestrians_scenarios import __version__
 import pedestrians_scenarios.karma as km
 from pedestrians_scenarios.karma.karma_data_provider import KarmaDataProvider
-from PIL import Image
+import numpy as np
 import carla
+from PIL import Image
 
 _logger = logging.getLogger(__name__)
 
@@ -79,13 +81,14 @@ def main(args):
         for model in models:
             pedestrians.append(km.Walker(
                 model=model, spawn_point=None,
-                random_location=True
+                random_location=True, tick=False
             ))
 
         karma.tick()
 
         cameras = []
         waypoints = []
+        directions = []
         for pedestrian in pedestrians:
             pedestrian_transform = pedestrian.get_transform()
             shifted_waypoint = KarmaDataProvider.get_shifted_driving_lane_waypoint(
@@ -93,24 +96,79 @@ def main(args):
 
             waypoints.append(shifted_waypoint)
 
+            direction_unit = (shifted_waypoint.transform.location -
+                              pedestrian_transform.location).make_unit_vector()
+            direction_unit.z = 0  # ignore height
+
+            distance_to_travel = 150
+            direction = direction_unit * distance_to_travel
+            directions.append(direction)
+
+            pedestrian.apply_control(carla.WalkerControl(
+                direction=direction_unit,
+                speed=2.1,
+                jump=False
+            ))
+
             cameras.append(km.FreeCamera(
                 look_at=shifted_waypoint.transform,
-                distance=[-10.0, -10.0, 10]
+                distance=[-10.0, -10.0, 10],
+                tick=False
             ))
             cameras.append(km.FreeCamera(
                 look_at=shifted_waypoint.transform,
-                distance=[-10.0, 0.0, 5.7]
+                distance=[-10.0, 0.0, 5.7],
+                tick=False
             ))
+
+        # ensure cameras spawned & control is applied
+        karma.tick()
 
         # ensure camera has transform
         karma.tick()
 
         os.makedirs('/outputs/scenarios/', exist_ok=True)
-        for camera in cameras:
-            d = camera.get_data()
-            print(camera.id)
-            Image.fromarray(d, 'RGB').save(
-                '/outputs/scenarios/{}.png'.format(camera.id), 'PNG')
+
+        vid = {}
+        for pi, ped in enumerate(pedestrians):
+            vid[ped.id] = []
+
+        for idx in range(0, 300):
+            frame = []
+            for camera in cameras:
+                d = camera.get_data()
+                frame.append(d)
+            n_frame = np.array(frame).astype(np.uint8)
+            n_frame = n_frame.reshape(
+                (4, 2, n_frame.shape[1], n_frame.shape[2], n_frame.shape[3]))
+            n_frame = n_frame.transpose((1, 0, 2, 3, 4))
+            n_frame = np.concatenate(n_frame, axis=2)
+
+            for pi, ped in enumerate(pedestrians):
+                vid[ped.id].append(n_frame[pi])
+
+            karma.tick()
+
+        for ped_id, frames in vid.items():
+            frames = np.array(frames).astype(np.uint8)
+
+            # copied from torchvision
+            with av.open(os.path.join('/outputs/scenarios/', f'{str(ped_id)}.mp4'), mode="w") as container:
+                stream = container.add_stream('libx264', rate=30)
+                stream.width = frames.shape[2]
+                stream.height = frames.shape[1]
+                stream.pix_fmt = "yuv420p"
+                stream.options = {}
+
+                for img in frames:
+                    frame = av.VideoFrame.from_ndarray(img, format="rgb24")
+                    frame.pict_type = "NONE"
+                    for packet in stream.encode(frame):
+                        container.mux(packet)
+
+                # Flush stream
+                for packet in stream.encode():
+                    container.mux(packet)
 
 
 def run():
