@@ -1,10 +1,13 @@
 import argparse
 import logging
 import sys
+import os
 
 from pedestrians_scenarios import __version__
 import pedestrians_scenarios.karma as km
-from pedestrians_scenarios.third_party.srunner.scenariomanager.carla_data_provider import CarlaDataProvider
+from pedestrians_scenarios.karma.karma_data_provider import KarmaDataProvider
+from PIL import Image
+import carla
 
 _logger = logging.getLogger(__name__)
 
@@ -67,15 +70,47 @@ def main(args):
     setup_logging(args.loglevel)
 
     with km.Karma(**kwargs) as karma:
-        pedestrian = km.Actor(
-            model='walker.pedestrian.0001', spawn_point=None,
-            random_location=True, actor_category='pedestrian'
-        )
-        karma.world.tick()
+        models = [
+            km.Walker.get_model_by_age_and_gender(a, g)
+            for (a, g) in (('adult', 'female'), ('adult', 'male'), ('child', 'female'), ('child', 'male'))
+        ]
 
-        pedestrian_transform = pedestrian.get_transform()
+        pedestrians = []
+        for model in models:
+            pedestrians.append(km.Walker(
+                model=model, spawn_point=None,
+                random_location=True
+            ))
 
-        print(pedestrian_transform)
+        karma.tick()
+
+        cameras = []
+        waypoints = []
+        for pedestrian in pedestrians:
+            pedestrian_transform = pedestrian.get_transform()
+            shifted_waypoint = KarmaDataProvider.get_shifted_driving_lane_waypoint(
+                pedestrian_transform.location)
+
+            waypoints.append(shifted_waypoint)
+
+            cameras.append(km.FreeCamera(
+                look_at=shifted_waypoint.transform,
+                distance=[-10.0, -10.0, 10]
+            ))
+            cameras.append(km.FreeCamera(
+                look_at=shifted_waypoint.transform,
+                distance=[-10.0, 0.0, 5.7]
+            ))
+
+        # ensure camera has transform
+        karma.tick()
+
+        os.makedirs('/outputs/scenarios/', exist_ok=True)
+        for camera in cameras:
+            d = camera.get_data()
+            print(camera.id)
+            Image.fromarray(d, 'RGB').save(
+                '/outputs/scenarios/{}.png'.format(camera.id), 'PNG')
 
 
 def run():
