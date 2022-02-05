@@ -6,6 +6,8 @@ from typing import Callable
 
 import carla
 
+from srunner.scenariomanager.actorcontrols.basic_control import BasicControl
+
 from .karma_data_provider import KarmaDataProvider
 
 
@@ -59,6 +61,7 @@ class Karma(object):
             event_type: {}
             for event_type in KarmaStage
         }
+        self.__registered_controllers = {}
 
         self.__client = carla.Client(host, port)
         self.__client.set_timeout(self.__timeout)
@@ -196,3 +199,24 @@ class Karma(object):
             if callback_id in self.__registered_callbacks[event_type]:
                 del self.__registered_callbacks[event_type][callback_id]
                 return
+
+    def register_controller(self, controller: BasicControl) -> None:
+        """
+        Registers a controller to be called at tick / reload.
+        """
+
+        tick_callback_id = self.register_callback(KarmaStage.tick, controller.run_step)
+        reload_callback_id = self.register_callback(KarmaStage.reload, controller.reset)
+
+        self.__registered_controllers[controller] = (
+            tick_callback_id, reload_callback_id)
+
+    def unregister_controller(self, controller: BasicControl) -> None:
+        """
+        Unregisters a controller previously registered with register_controller.
+        """
+        if controller in self.__registered_controllers:
+            tick_callback_id, reload_callback_id = self.__registered_controllers[controller]
+            self.unregister_callback(tick_callback_id)
+            self.unregister_callback(reload_callback_id)
+            del self.__registered_controllers[controller]

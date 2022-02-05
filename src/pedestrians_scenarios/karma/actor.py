@@ -15,20 +15,20 @@ class Actor(Generic[A]):
     def __init__(self, actor: A = None, **kwargs) -> None:
         if actor is None:
             actor = KarmaDataProvider.request_new_actor(**kwargs)
-        self.__actor = actor
+        self._actor = actor
 
     def get_transform(self) -> carla.Transform:
-        return KarmaDataProvider.get_transform(self.__actor)
+        return KarmaDataProvider.get_transform(self._actor)
 
     def get_location(self) -> carla.Location:
-        return KarmaDataProvider.get_location(self.__actor)
+        return KarmaDataProvider.get_location(self._actor)
 
     def get_velocity(self) -> float:
-        return KarmaDataProvider.get_velocity(self.__actor)
+        return KarmaDataProvider.get_velocity(self._actor)
 
     @property
     def id(self) -> int:
-        return self.__actor.id
+        return self._actor.id
 
     def __getattr__(self, __name: str) -> Any:
-        return getattr(self.__actor, __name)
+        return getattr(self._actor, __name)

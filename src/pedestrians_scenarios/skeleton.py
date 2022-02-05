@@ -1,16 +1,18 @@
 import argparse
 import logging
 import sys
-import os
 import time
 from typing import List
-import av
 
 from pedestrians_scenarios import __version__
 import pedestrians_scenarios.karma as km
+from pedestrians_scenarios.karma.utils.deepcopy import deepcopy_transform
 from pedestrians_scenarios.karma.cameras import CamerasManager, FramesMergingMathod
 from pedestrians_scenarios.karma.karma_data_provider import KarmaDataProvider
 import carla
+from tqdm.auto import trange
+import numpy as np
+from pedestrians_scenarios.pedestrian_controls import BasicPedestrianControl
 
 _logger = logging.getLogger(__name__)
 
@@ -111,19 +113,30 @@ def main(args):
             direction_unit.z = 0  # ignore height
             direction_unit = direction_unit.make_unit_vector()
 
-            pedestrian.apply_control(carla.WalkerControl(
-                direction=direction_unit,
-                speed=1.4,
-                jump=False
-            ))
+            # shortcut, since we're ignoring elevation
+            pedestrian_transform = deepcopy_transform(pedestrian.get_transform())
+            delta = np.rad2deg(np.arctan2(direction_unit.y, direction_unit.x))
+            pedestrian_transform.rotation.yaw = pedestrian_transform.rotation.yaw + delta
+            pedestrian.set_transform(pedestrian_transform)
+
+        # tick here, to ensure all pedestrians have rotated
+        karma.tick()
+
+        # create contollers for each pedestrian and register them with Karma
+        for pedestrian in pedestrians:
+            controller = BasicPedestrianControl(pedestrian)
+            controller.update_target_speed(1.2)
+            karma.register_controller(controller)
 
         # start cameras
         for (pedestrian, manager) in zip(pedestrians, camera_managers):
             manager.start_recording(pedestrian.id)
 
         # move simulation forward
-        for idx in range(0, 600):
+        for idx in trange(0, 60):
             karma.tick()
+
+        time.sleep(1)
 
 
 def run():

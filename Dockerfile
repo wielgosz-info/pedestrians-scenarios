@@ -19,10 +19,13 @@ RUN /venv/bin/python -m pip install --no-cache-dir \
     simple-watchdog-timer==0.1.1 \
     six==1.16.0 \
     tabulate==0.8.9 \
+    tqdm==4.62.3 \
     xmlschema==1.0.18
-
 
 # Copy client files so that we can do editable pip install
 COPY --chown=${USERNAME}:${USERNAME} . /app
 
+# "Install" scenario_runner, so that srunner imports succeed
+RUN ln -s /app/third_party/scenario_runner/srunner /venv/lib/python3.8/site-packages/srunner
+# needed to find the example scenarios
 ENV SCENARIO_RUNNER_ROOT=/app/third_party/scenario_runner

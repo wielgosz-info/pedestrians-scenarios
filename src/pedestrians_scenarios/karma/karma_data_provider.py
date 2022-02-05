@@ -5,7 +5,7 @@ from typing import List
 import carla
 import numpy
 from pedestrians_scenarios.karma.utils.deepcopy import deepcopy_location, deepcopy_transform
-from pedestrians_scenarios.third_party.srunner.scenariomanager.carla_data_provider import CarlaDataProvider
+from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 
 
 class KarmaDataProvider(CarlaDataProvider):
