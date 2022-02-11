@@ -10,13 +10,14 @@ import carla
 import numpy as np
 import pandas as pd
 import pedestrians_scenarios.karma as km
-from pedestrians_scenarios.karma.cameras.cameras_manager import (
+from pedestrians_scenarios.karma.cameras import (
     CamerasManager, FramesMergingMathod)
-from pedestrians_scenarios.karma.karma import KarmaStage
-from pedestrians_scenarios.karma.karma_data_provider import KarmaDataProvider
+from pedestrians_scenarios.karma.pose.pose_dict import convert_flat_list_to_pose_dict, convert_pose_dict_to_flat_list, get_pedestrian_pose_dicts
 from srunner.scenariomanager.actorcontrols.pedestrian_control import \
     PedestrianControl
 from tqdm.auto import trange
+
+from pedestrians_scenarios.karma.utils.conversions import convert_transform_to_flat_list
 
 StandardDistribution = namedtuple('StandardDistribution', ['mean', 'std'])
 PedestrianProfile = namedtuple(
@@ -72,7 +73,7 @@ class Generator(object):
         self._clip_length_in_frames = clip_length_in_frames
         self._pedestrian_distribution = pedestrian_distribution
         self._camera_distances_distributions = camera_position_distributions
-        self._rng = KarmaDataProvider.get_rng()
+        self._rng = km.KarmaDataProvider.get_rng()
         self._batch_size = batch_size
         self._camera_fov = camera_fov
         self._camera_image_size = camera_image_size
@@ -119,7 +120,7 @@ class Generator(object):
         for clip_profiles in profiles:
             in_clip = []
             for _ in clip_profiles:
-                in_clip.append(KarmaDataProvider.get_pedestrian_spawn_point())
+                in_clip.append(km.KarmaDataProvider.get_pedestrian_spawn_point())
             spawn_points.append(in_clip)
         return spawn_points
 
@@ -290,7 +291,7 @@ class Generator(object):
         """
         Get the map for a batch. All pedestrians in batch will be spawned in the same world at the same time.
         """
-        return self._rng.choice(KarmaDataProvider.get_available_maps())
+        return self._rng.choice(km.KarmaDataProvider.get_available_maps())
 
     def generate(self) -> None:
         """
@@ -357,7 +358,7 @@ class Generator(object):
         # prepare data capture callback
         frame_data = [[] for _ in range(self._batch_size)]
         capture_callback_id = self._karma.register_callback(
-            KarmaStage.tick, lambda snapshot: self.capture_frame_data(snapshot, pedestrians, frame_data))
+            km.KarmaStage.tick, lambda snapshot: self.capture_frame_data(snapshot, pedestrians, frame_data))
 
         # move simulation forward the required number of frames
         # and capture per-frame data
@@ -385,7 +386,7 @@ class Generator(object):
 
         # collect batch data
         batch_data = self.collect_batch_data(
-            map_name, profiles, spawn_points, models, pedestrians, camera_distances, camera_look_at, recordings, recorded_frames, frame_data)
+            map_name, profiles, spawn_points, models, pedestrians, camera_managers, recordings, recorded_frames, frame_data)
 
         return batch_data
 
@@ -400,6 +401,9 @@ class Generator(object):
                 pedestrian_transform = pedestrian_snapshot.get_transform()
                 pedestrian_velocity = pedestrian_snapshot.get_velocity()
 
+                world_pose, component_pose, relative_pose = get_pedestrian_pose_dicts(
+                    pedestrian)
+
                 current_frame_data.append({
                     'world.frame': snapshot.frame,
                     'frame.pedestrian.id': pedestrian.id,
@@ -412,36 +416,22 @@ class Generator(object):
                     'frame.pedestrian.velocity.x': pedestrian_velocity.x,
                     'frame.pedestrian.velocity.y': pedestrian_velocity.y,
                     'frame.pedestrian.velocity.z': pedestrian_velocity.z,
+                    'frame.pedestrian.pose.world': convert_pose_dict_to_flat_list(world_pose),
+                    'frame.pedestrian.pose.component': convert_pose_dict_to_flat_list(component_pose),
+                    'frame.pedestrian.pose.relative': convert_pose_dict_to_flat_list(relative_pose),
                 })
                 # TODO: add the actual data of interest for each frame - 3D pose, 2D pose
 
             clip_data.append(current_frame_data)
 
-    def collect_batch_data(self, map_name, profiles, spawn_points, models, pedestrians, camera_distances, camera_look_at, recordings, recorded_frames, captured_data):
+    def collect_batch_data(self, map_name, profiles, spawn_points, models, pedestrians, camera_managers, recordings, recorded_frames, captured_data):
         batch_data = []
         for clip_idx in range(self._batch_size):
-            # recordings base name; at the moment we assume a single CameraManager per clip,
-            # and therefore a single recording basename;
-            # optionally there can be no recordings (e.g due to spawning/timeout errors)
-            # TODO: handle multiple managers per clip
-            manager_idx = 0
-            recording: str = recordings[clip_idx][manager_idx] if len(
-                recordings[clip_idx]) else None
-
-            if recording is None:
-                logging.getLogger(__name__).warning(
-                    f'No recording was created fot clip {clip_idx}, skipping.')
-                continue
-
-            clip_recorded_frames: Iterable[int] = sorted(
-                recorded_frames[clip_idx][manager_idx])
-
+            clip_managers: Iterable[CamerasManager] = camera_managers[clip_idx]
             clip_models: Iterable[str] = models[clip_idx]
             clip_profiles: Iterable[PedestrianProfile] = profiles[clip_idx]
             clip_spawn_points: Iterable[carla.Transform] = spawn_points[clip_idx]
             clip_pedestrians: Iterable[km.Walker] = pedestrians[clip_idx]
-            clip_camera_distances: Iterable[Tuple[float]] = camera_distances[clip_idx]
-            clip_camera_look_at: Iterable[carla.Transform] = camera_look_at[clip_idx]
 
             clip_captured_data: Iterable[Dict] = sorted(
                 captured_data[clip_idx], key=lambda x: x[0]['world.frame'])
@@ -452,56 +442,69 @@ class Generator(object):
 
             clip_id = str(uuid4())  # make it unique in dataset
 
-            # TODO: in multi-manager setup, the number of cameras in each manager
-            # is not necessarily the same as len(clip_camera_distances) == len(clip_camera_look_at).
-            # Also, there can be cameras other than FreeCamera, that also produce recordings.
-            # Also, some of the cameras can move (e.g. attached to a vehicle), so camera position should be per frame also?
-            for camera_idx, (distance, look_at) in enumerate(zip(clip_camera_distances, clip_camera_look_at)):
-                min_frame = clip_recorded_frames[0]
-                max_frame = clip_recorded_frames[-1]
+            for manager_idx, manager in enumerate(clip_managers):
+                recording: str = recordings[clip_idx][manager_idx] if len(
+                    recordings[clip_idx]) else None
 
-                for frame_idx, world_frame in enumerate(range(min_frame, max_frame + 1)):
-                    # extract frame data or minimal dict if not available
-                    if world_frame in clip_captured_data_frames:
-                        frame = clip_captured_data[clip_captured_data_frames.index(
-                            world_frame)]
-                    else:
-                        frame = [{
-                            'frame.pedestrian.id': p.id,
-                            'world.frame': world_frame
-                        } for p in range(len(clip_pedestrians))]
+                if recording is None:
+                    logging.getLogger(__name__).warning(
+                        f'No recording was created fot clip {clip_idx}, skipping.')
+                    continue
 
-                    for pedestrian_idx, (profile, model, spawn_point, pedestrian) in enumerate(zip(clip_profiles, clip_models, clip_spawn_points, clip_pedestrians)):
-                        assert frame[pedestrian_idx]['frame.pedestrian.id'] == pedestrian.id, "Pedestrian ID mismatch"
-                        assert frame[pedestrian_idx]['world.frame'] == world_frame, "World frame mismatch"
+                clip_recorded_frames: Iterable[int] = sorted(
+                    recorded_frames[clip_idx][manager_idx])
 
-                        full_frame_data = {
-                            'id': clip_id,
-                            'world.map': map_name,
-                            'camera.idx': camera_idx,
-                            'camera.recording': f'{recording}-{camera_idx}.mp4',
-                            'camera.distance.x': distance[0],
-                            'camera.distance.y': distance[1],
-                            'camera.distance.z': distance[2],
-                            'camera.look_at.x': look_at.location.x,
-                            'camera.look_at.y': look_at.location.y,
-                            'camera.look_at.z': look_at.location.z,
-                            'camera.look_at.pitch': look_at.rotation.pitch,
-                            'camera.look_at.yaw': look_at.rotation.yaw,
-                            'camera.look_at.roll': look_at.rotation.roll,
-                            'pedestrian.idx': pedestrian_idx,
-                            'pedestrian.model': model,
-                            'pedestrian.age': profile.age,
-                            'pedestrian.gender': profile.gender,
-                            'pedestrian.spawn_point.x': spawn_point.location.x,
-                            'pedestrian.spawn_point.y': spawn_point.location.y,
-                            'pedestrian.spawn_point.z': spawn_point.location.z,
-                            'pedestrian.spawn_point.pitch': spawn_point.rotation.pitch,
-                            'pedestrian.spawn_point.yaw': spawn_point.rotation.yaw,
-                            'pedestrian.spawn_point.roll': spawn_point.rotation.roll,
-                            'frame.idx': frame_idx,
-                        }
-                        full_frame_data.update(frame[pedestrian_idx])
+                for camera_idx, camera in enumerate(manager.get_streamed_cameras()):
+                    # TODO: Some of the cameras can move (e.g. attached to a vehicle), so camera position should be per frame
+                    # but for now we assume only FreeCameras that are static
+                    camera_transform = camera.get_transform()
 
-                        batch_data.append(full_frame_data)
+                    min_frame = clip_recorded_frames[0]
+                    max_frame = clip_recorded_frames[-1]
+
+                    skip = 0
+                    for frame_idx, world_frame in enumerate(range(min_frame, max_frame + 1)):
+                        # skip frame if it is not in the recorded frames - we do not want to have
+                        # indexing differences between video and captured data
+                        if world_frame not in clip_recorded_frames:
+                            skip += 1
+                            continue
+
+                        # extract frame data or minimal dict if not available
+                        if world_frame in clip_captured_data_frames:
+                            frame = clip_captured_data[clip_captured_data_frames.index(
+                                world_frame)]
+                        else:
+                            frame = [{
+                                'frame.pedestrian.id': p.id,
+                                'world.frame': world_frame
+                            } for p in range(len(clip_pedestrians))]
+
+                        for pedestrian_idx, (profile, model, spawn_point, pedestrian) in enumerate(zip(clip_profiles, clip_models, clip_spawn_points, clip_pedestrians)):
+                            assert frame[pedestrian_idx]['frame.pedestrian.id'] == pedestrian.id, "Pedestrian ID mismatch"
+                            assert frame[pedestrian_idx]['world.frame'] == world_frame, "World frame mismatch"
+
+                            full_frame_data = {
+                                'id': clip_id,
+                                'world.map': map_name,
+                                'camera.idx': camera_idx,
+                                'camera.recording': f'clips/{recording}-{camera_idx}.mp4',
+                                'camera.transform': convert_transform_to_flat_list(camera_transform),
+                                'pedestrian.idx': pedestrian_idx,
+                                'pedestrian.model': model,
+                                'pedestrian.age': profile.age,
+                                'pedestrian.gender': profile.gender,
+                                'pedestrian.spawn_point': convert_transform_to_flat_list(spawn_point),
+                                'frame.idx': frame_idx - skip,
+                            }
+                            full_frame_data.update(frame[pedestrian_idx])
+
+                            # if 'frame.pedestrian.pose.world' in frame[pedestrian_idx]:
+                            #     full_frame_data['frame.camera.pose'] = project_pose(
+                            #         convert_flat_list_to_pose_dict(
+                            #             frame[pedestrian_idx]['frame.pedestrian.pose.world']),
+                            #         camera_transform
+                            #     )
+
+                            batch_data.append(full_frame_data)
         return batch_data

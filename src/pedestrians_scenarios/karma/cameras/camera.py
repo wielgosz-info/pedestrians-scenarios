@@ -57,6 +57,9 @@ class Camera(object):
     def sensor(self) -> carla.Sensor:
         return self._camera
 
+    def get_transform(self) -> carla.Transform:
+        return self._camera.get_transform()
+
     def get_data(self) -> Union[np.ndarray, None]:
         """
         Returns the most recent image from camera as an RGB numpy array (PIL-compatible).

@@ -31,3 +31,6 @@ class FreeCamera(Actor, Camera):
 
         Actor.__init__(self, actor=camera)
         Camera.__init__(self, sensor=camera, **kwargs)
+
+    def get_transform(self) -> carla.Transform:
+        return Actor.get_transform(self)

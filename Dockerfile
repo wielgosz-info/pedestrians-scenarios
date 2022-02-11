@@ -6,6 +6,7 @@ ENV PACKAGE=pedestrians-scenarios
 # Install direct dependencies and scenario_runner ones
 RUN /venv/bin/python -m pip install --no-cache-dir \
     av==8.0.3 \
+    cameratransform==1.2 \
     ephem==4.1.3 \
     matplotlib==3.5.1 \
     networkx==2.2 \

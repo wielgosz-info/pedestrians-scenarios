@@ -252,3 +252,9 @@ class CamerasManager(object):
         self.__captured_frames = None
 
         return captured
+
+    def get_streamed_cameras(self) -> List[Camera]:
+        """
+        Returns a list of cameras that are being streamed.
+        """
+        return list(self.__streamed_cameras.values())
