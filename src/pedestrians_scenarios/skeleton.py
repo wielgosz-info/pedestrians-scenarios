@@ -5,6 +5,7 @@ import time
 from typing import List
 
 from pedestrians_scenarios import __version__
+from pedestrians_scenarios.datasets.basic_crossing import BasicSinglePedestrianCrossing
 import pedestrians_scenarios.karma as km
 from pedestrians_scenarios.karma.utils.deepcopy import deepcopy_transform
 from pedestrians_scenarios.karma.cameras import CamerasManager, FramesMergingMathod
@@ -68,75 +69,15 @@ def setup_logging(loglevel):
 
 def main(args):
     parser = add_cli_args()
-    km.Karma.add_cli_args(parser)
+    parser = km.Karma.add_cli_args(parser)
+    parser = BasicSinglePedestrianCrossing.add_cli_args(parser)
 
     args = parser.parse_args(args)
     kwargs = vars(args)
     setup_logging(args.loglevel)
 
-    with km.Karma(**kwargs) as karma:
-        models = [
-            km.Walker.get_model_by_age_and_gender(a, g)
-            for (a, g) in (('adult', 'female'), ('adult', 'male'), ('child', 'female'), ('child', 'male'))
-        ]
-
-        pedestrians: List[km.Walker] = []
-        for model in models:
-            pedestrians.append(km.Walker(
-                model=model, spawn_point=None,
-                random_location=True, tick=False
-            ))
-
-        karma.tick()
-
-        camera_managers: List[CamerasManager] = []
-        waypoints: List[carla.Waypoint] = []
-
-        for pedestrian in pedestrians:
-            waypoint = KarmaDataProvider.get_shifted_driving_lane_waypoint(
-                pedestrian.get_transform().location)
-
-            waypoints.append(waypoint)
-
-            manager = CamerasManager(
-                karma, merging_method=FramesMergingMathod.horizontal)
-            manager.create_free_cameras((
-                (waypoint.transform, [-10.0, -10.0, 10]),
-                (waypoint.transform, [-10.0, 10.0, 10]),
-                (waypoint.transform, [-10.0, 0.0, 1.2])
-            ))  # this ticks the world
-            camera_managers.append(manager)
-
-        for pedestrian, waypoint in zip(pedestrians, waypoints):
-            direction_unit = (waypoint.transform.location -
-                              pedestrian.get_transform().location)
-            direction_unit.z = 0  # ignore height
-            direction_unit = direction_unit.make_unit_vector()
-
-            # shortcut, since we're ignoring elevation
-            pedestrian_transform = deepcopy_transform(pedestrian.get_transform())
-            delta = np.rad2deg(np.arctan2(direction_unit.y, direction_unit.x))
-            pedestrian_transform.rotation.yaw = pedestrian_transform.rotation.yaw + delta
-            pedestrian.set_transform(pedestrian_transform)
-
-        # tick here, to ensure all pedestrians have rotated
-        karma.tick()
-
-        # create contollers for each pedestrian and register them with Karma
-        for pedestrian in pedestrians:
-            controller = BasicPedestrianControl(pedestrian)
-            controller.update_target_speed(1.2)
-            karma.register_controller(controller)
-
-        # start cameras
-        for (pedestrian, manager) in zip(pedestrians, camera_managers):
-            manager.start_recording(pedestrian.id)
-
-        # move simulation forward
-        for idx in trange(0, 60):
-            karma.tick()
-
-        time.sleep(1)
+    gen = BasicSinglePedestrianCrossing(**kwargs)
+    gen.generate()
 
 
 def run():

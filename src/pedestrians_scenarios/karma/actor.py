@@ -15,6 +15,8 @@ class Actor(Generic[A]):
     def __init__(self, actor: A = None, **kwargs) -> None:
         if actor is None:
             actor = KarmaDataProvider.request_new_actor(**kwargs)
+        if actor is None:
+            raise RuntimeError("Actor could not be created")
         self._actor = actor
 
     def get_transform(self) -> carla.Transform:

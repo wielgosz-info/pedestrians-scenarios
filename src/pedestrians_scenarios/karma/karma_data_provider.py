@@ -21,6 +21,8 @@ class KarmaDataProvider(CarlaDataProvider):
     _pedestrian_spawn_index = 0
     _pedestrian_spawn_points = None
 
+    _available_maps = None
+
     @staticmethod
     def get_blueprint_library() -> carla.BlueprintLibrary:
         return CarlaDataProvider._blueprint_library
@@ -174,3 +176,12 @@ class KarmaDataProvider(CarlaDataProvider):
         KarmaDataProvider._pedestrian_spawn_index = 0
 
         CarlaDataProvider.cleanup()
+
+    @staticmethod
+    def get_available_maps():
+        """
+        Get available map names.
+        """
+        if not KarmaDataProvider._available_maps:
+            KarmaDataProvider._available_maps = CarlaDataProvider.get_client().get_available_maps()
+        return KarmaDataProvider._available_maps

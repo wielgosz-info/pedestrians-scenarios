@@ -16,3 +16,6 @@ class BasicPedestrianControl(PedestrianControl):
         # we need to skip the PedestrianControl init,
         # instead we call the BasicControl one directly
         BasicControl.__init__(self, actor)
+
+    def run_step(self, *args, **kwargs):
+        return super().run_step()

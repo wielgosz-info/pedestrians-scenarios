@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import time
 from enum import Enum, auto
@@ -36,23 +37,17 @@ class Karma(object):
         self,
         host='server',
         port=2000,
-        timeout=10.0,
+        timeout=20.0,
         traffic_manager_port=8000,
         seed=22752,
         fps=30.0,
         hybrid_physics_mode=False,
-        outputs_dir=None,
         **kwargs
     ) -> None:
         self.__timeout = timeout
         self.__seed = seed
         self.__fps = fps
         self.__hybrid_physics_mode = hybrid_physics_mode
-
-        if outputs_dir is None:
-            outputs_dir = os.path.join(os.getcwd(), 'outputs')
-        self.__outputs_dir = outputs_dir
-        os.makedirs(self.__outputs_dir, exist_ok=True)
 
         self.__on_tick_callback_id = None
 
@@ -93,8 +88,6 @@ class Karma(object):
                                help='FPS of the simulation (default: 30)')
         subparser.add_argument('--hybrid-physics-mode', default=False, action='store_true',
                                help='Enable hybrid physics mode (default: False)')
-        subparser.add_argument('--outputs-dir', default=None, type=str,
-                               help='Directory to store outputs (default: outputs)')
 
         return parser
 
@@ -105,10 +98,6 @@ class Karma(object):
         self.close()
 
         return False
-
-    @property
-    def outputs_dir(self) -> str:
-        return self.__outputs_dir
 
     def tick(self) -> int:
         return self.__world.tick()
@@ -121,18 +110,37 @@ class Karma(object):
             self.__world.remove_on_tick(self.__on_tick_callback_id)
 
             if map_name is not None and KarmaDataProvider.get_map().name != map_name:
-                self.__client.load_world(map_name)
+                tries = int(self.__timeout)
+                while tries > 0:
+                    try:
+                        logging.getLogger(__name__).debug(
+                            f'Loading map {map_name}, {tries} tries left...')
+                        self.__client.load_world(map_name)
+                        logging.getLogger(__name__).debug(
+                            f'Loading map {map_name} succeeded.')
+                        tries = 0
+                    except RuntimeError:
+                        tries -= 1
+                        if tries > 0:
+                            time.sleep(1)
+                        else:
+                            raise
             else:
+                logging.getLogger(__name__).debug(f'Reloading map {map_name}...')
                 self.__client.reload_world()
+                logging.getLogger(__name__).debug(
+                    f'Reloading map {map_name} succeeded.')
 
+        logging.getLogger(__name__).debug(f'Getting world...')
         self.__world = self.__client.get_world()
-        tries = self.__timeout
+        tries = int(self.__timeout)
         while prev_id == self.__world.id and tries > 0:
             tries -= 1
             time.sleep(1)
             self.__world = self.__client.get_world()
         if tries < 1:
             raise RuntimeError("Could not reset world.")
+        logging.getLogger(__name__).debug(f'Getting world succeeded.')
 
         # always reset settings
         settings = carla.WorldSettings()
@@ -180,7 +188,7 @@ class Karma(object):
         KarmaDataProvider.on_carla_tick(snapshot)
 
         for callback in self.__registered_callbacks[KarmaStage.tick].values():
-            callback()
+            callback(snapshot)
 
     def register_callback(self, stage: KarmaStage, callback: Callable[[], None]) -> int:
         """

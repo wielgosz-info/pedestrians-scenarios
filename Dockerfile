@@ -11,6 +11,7 @@ RUN /venv/bin/python -m pip install --no-cache-dir \
     networkx==2.2 \
     numpy==1.22.1 \
     opencv-python-headless==4.2.0.32 \
+    pandas==1.3.5 \
     Pillow==9.0.0 \
     psutil==5.9.0 \
     py-trees==0.8.3 \
