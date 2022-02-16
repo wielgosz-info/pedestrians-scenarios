@@ -14,8 +14,10 @@ RUN /venv/bin/python -m pip install --no-cache-dir \
     opencv-python-headless==4.2.0.32 \
     pandas==1.3.5 \
     Pillow==9.0.0 \
+    pims==0.5 \
     psutil==5.9.0 \
     py-trees==0.8.3 \
+    scikit-image==0.18.3 \
     scipy==1.7.2 \
     Shapely==1.7.1 \
     simple-watchdog-timer==0.1.1 \

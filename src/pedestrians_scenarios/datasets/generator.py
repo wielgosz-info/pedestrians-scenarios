@@ -12,12 +12,13 @@ import pandas as pd
 import pedestrians_scenarios.karma as km
 from pedestrians_scenarios.karma.cameras import (
     CamerasManager, FramesMergingMathod)
-from pedestrians_scenarios.karma.pose.pose_dict import convert_flat_list_to_pose_dict, convert_pose_dict_to_flat_list, get_pedestrian_pose_dicts
+from pedestrians_scenarios.karma.pose.pose_dict import convert_flat_list_to_pose_dict, convert_pose_2d_dict_to_flat_list, convert_pose_dict_to_flat_list, get_pedestrian_pose_dicts
 from srunner.scenariomanager.actorcontrols.pedestrian_control import \
     PedestrianControl
 from tqdm.auto import trange
+from pedestrians_scenarios.karma.pose.projection import project_pose
 
-from pedestrians_scenarios.karma.utils.conversions import convert_transform_to_flat_list
+from pedestrians_scenarios.karma.utils.conversions import convert_transform_to_flat_list, convert_vector3d_to_flat_list
 
 StandardDistribution = namedtuple('StandardDistribution', ['mean', 'std'])
 PedestrianProfile = namedtuple(
@@ -57,7 +58,7 @@ class Generator(object):
                      (ExamplePedestrianProfiles.child_male.value, 0.25)
                  ),
                  camera_position_distributions: Iterable[Iterable[StandardDistribution]] = ((
-                     StandardDistribution(-10.0, 1.0),
+                     StandardDistribution(-7.0, 2.0),
                      StandardDistribution(0.0, 0.25),
                      StandardDistribution(1.0, 0.25)
                  ),),
@@ -407,15 +408,8 @@ class Generator(object):
                 current_frame_data.append({
                     'world.frame': snapshot.frame,
                     'frame.pedestrian.id': pedestrian.id,
-                    'frame.pedestrian.location.x': pedestrian_transform.location.x,
-                    'frame.pedestrian.location.y': pedestrian_transform.location.y,
-                    'frame.pedestrian.location.z': pedestrian_transform.location.z,
-                    'frame.pedestrian.rotation.pitch': pedestrian_transform.rotation.pitch,
-                    'frame.pedestrian.rotation.yaw': pedestrian_transform.rotation.yaw,
-                    'frame.pedestrian.rotation.roll': pedestrian_transform.rotation.roll,
-                    'frame.pedestrian.velocity.x': pedestrian_velocity.x,
-                    'frame.pedestrian.velocity.y': pedestrian_velocity.y,
-                    'frame.pedestrian.velocity.z': pedestrian_velocity.z,
+                    'frame.pedestrian.transform': convert_transform_to_flat_list(pedestrian_transform),
+                    'frame.pedestrian.velocity': convert_vector3d_to_flat_list(pedestrian_velocity),
                     'frame.pedestrian.pose.world': convert_pose_dict_to_flat_list(world_pose),
                     'frame.pedestrian.pose.component': convert_pose_dict_to_flat_list(component_pose),
                     'frame.pedestrian.pose.relative': convert_pose_dict_to_flat_list(relative_pose),
@@ -499,12 +493,15 @@ class Generator(object):
                             }
                             full_frame_data.update(frame[pedestrian_idx])
 
-                            # if 'frame.pedestrian.pose.world' in frame[pedestrian_idx]:
-                            #     full_frame_data['frame.camera.pose'] = project_pose(
-                            #         convert_flat_list_to_pose_dict(
-                            #             frame[pedestrian_idx]['frame.pedestrian.pose.world']),
-                            #         camera_transform
-                            #     )
+                            if 'frame.pedestrian.pose.world' in frame[pedestrian_idx]:
+                                camera_pose = project_pose(
+                                    convert_flat_list_to_pose_dict(
+                                        frame[pedestrian_idx]['frame.pedestrian.pose.world']),
+                                    camera_transform,
+                                    camera
+                                )
+                                full_frame_data['frame.camera.pose'] = convert_pose_2d_dict_to_flat_list(
+                                    camera_pose)
 
                             batch_data.append(full_frame_data)
         return batch_data

@@ -64,8 +64,32 @@ class CARLA_SKELETON(Enum):
 
     @classmethod
     def get_edges(cls) -> List[Tuple[int, int]]:
-        # TODO: add edges
-        return []
+        return [
+            [CARLA_SKELETON.crl_hips__C, CARLA_SKELETON.crl_spine__C],
+            [CARLA_SKELETON.crl_spine__C, CARLA_SKELETON.crl_spine01__C],
+            [CARLA_SKELETON.crl_spine01__C, CARLA_SKELETON.crl_shoulder__L],
+            [CARLA_SKELETON.crl_shoulder__L, CARLA_SKELETON.crl_arm__L],
+            [CARLA_SKELETON.crl_arm__L, CARLA_SKELETON.crl_foreArm__L],
+            [CARLA_SKELETON.crl_foreArm__L, CARLA_SKELETON.crl_hand__L],
+            [CARLA_SKELETON.crl_spine01__C, CARLA_SKELETON.crl_neck__C],
+            [CARLA_SKELETON.crl_neck__C, CARLA_SKELETON.crl_Head__C],
+            [CARLA_SKELETON.crl_Head__C, CARLA_SKELETON.crl_eye__L],
+            [CARLA_SKELETON.crl_Head__C, CARLA_SKELETON.crl_eye__R],
+            [CARLA_SKELETON.crl_spine01__C, CARLA_SKELETON.crl_shoulder__R],
+            [CARLA_SKELETON.crl_shoulder__R, CARLA_SKELETON.crl_arm__R],
+            [CARLA_SKELETON.crl_arm__R, CARLA_SKELETON.crl_foreArm__R],
+            [CARLA_SKELETON.crl_foreArm__R, CARLA_SKELETON.crl_hand__R],
+            [CARLA_SKELETON.crl_hips__C, CARLA_SKELETON.crl_thigh__R],
+            [CARLA_SKELETON.crl_thigh__R, CARLA_SKELETON.crl_leg__R],
+            [CARLA_SKELETON.crl_leg__R, CARLA_SKELETON.crl_foot__R],
+            [CARLA_SKELETON.crl_foot__R, CARLA_SKELETON.crl_toe__R],
+            [CARLA_SKELETON.crl_toe__R, CARLA_SKELETON.crl_toeEnd__R],
+            [CARLA_SKELETON.crl_hips__C, CARLA_SKELETON.crl_thigh__L],
+            [CARLA_SKELETON.crl_thigh__L, CARLA_SKELETON.crl_leg__L],
+            [CARLA_SKELETON.crl_leg__L, CARLA_SKELETON.crl_foot__L],
+            [CARLA_SKELETON.crl_foot__L, CARLA_SKELETON.crl_toe__L],
+            [CARLA_SKELETON.crl_toe__L, CARLA_SKELETON.crl_toeEnd__L],
+        ]
 
     @classmethod
     def get_root_point(cls) -> int:

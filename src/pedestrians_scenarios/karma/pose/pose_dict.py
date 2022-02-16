@@ -6,6 +6,7 @@ from pedestrians_scenarios import karma as km
 from .skeleton import CARLA_SKELETON
 
 PoseDict = Dict[CARLA_SKELETON, carla.Transform]
+Pose2DDict = Dict[CARLA_SKELETON, carla.Vector2D]
 
 
 def get_pedestrian_pose_dicts(pedestrian: Union[km.Walker, carla.Walker]) -> Tuple[PoseDict, PoseDict, PoseDict]:
@@ -56,5 +57,25 @@ def convert_flat_list_to_pose_dict(pose_flat: List[float]) -> PoseDict:
             carla.Rotation(pitch=pose_flat[i + 3],
                            yaw=pose_flat[i + 4], roll=pose_flat[i + 5])
         )
+
+    return pose
+
+
+def convert_pose_2d_dict_to_flat_list(pose: Pose2DDict) -> List[float]:
+    pose_flat = []
+
+    for bone in pose.values():
+        pose_flat.append(bone.x)
+        pose_flat.append(bone.y)
+
+    return pose_flat
+
+
+def convert_flat_list_to_pose_2d_dict(pose_flat: List[float]) -> Pose2DDict:
+    pose = {}
+
+    for bone in CARLA_SKELETON:
+        i = bone.value * 2
+        pose[bone] = carla.Vector2D(x=pose_flat[i + 0], y=pose_flat[i + 1])
 
     return pose

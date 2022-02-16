@@ -191,7 +191,8 @@ class CamerasManager(object):
         Callback called during Karma.on_carla_tick.
         """
 
-        all_cameras = list(self.__streamed_cameras.values())
+        all_cameras: List[Union[FreeCamera, Camera]] = list(
+            self.__streamed_cameras.values())
         for fi in range(len(self.__containers)):
             container = self.__containers[fi]
             stream = self.__streams[fi]

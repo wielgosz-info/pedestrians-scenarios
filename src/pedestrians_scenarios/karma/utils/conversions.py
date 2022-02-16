@@ -2,6 +2,29 @@ from typing import List
 import carla
 
 
+def convert_vector2d_to_flat_list(vector2d: carla.Vector2D) -> List[float]:
+    return [
+        vector2d.x,
+        vector2d.y,
+    ]
+
+
+def convert_flat_list_to_vector2d(vector2d_flat: List[float]) -> carla.Vector2D:
+    return carla.Vector2D(x=vector2d_flat[0], y=vector2d_flat[1])
+
+
+def convert_vector3d_to_flat_list(vector3d: carla.Vector3D) -> List[float]:
+    return [
+        vector3d.x,
+        vector3d.y,
+        vector3d.z,
+    ]
+
+
+def convert_flat_list_to_vector3d(vector3d_flat: List[float]) -> carla.Vector3D:
+    return carla.Vector3D(x=vector3d_flat[0], y=vector3d_flat[1], z=vector3d_flat[2])
+
+
 def convert_transform_to_flat_list(transform: carla.Transform) -> List[float]:
     return [
         transform.location.x,
