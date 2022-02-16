@@ -15,12 +15,12 @@ class PointsRenderer(Renderer):
     def render(self, frames: Union['Tensor', np.ndarray], **kwargs) -> List[np.ndarray]:
         rendered_videos = len(frames)
 
-        if not isinstance(frames, np.ndarray):
-            cpu_frames = frames.cpu().numpy()
-        else:
+        if isinstance(frames, np.ndarray):
             cpu_frames = frames
+        else:
+            cpu_frames = frames.cpu().numpy()
 
-        frames = frames[..., 0:2].round().astype(np.int)
+        cpu_frames = cpu_frames[..., 0:2].round().astype(np.int)
 
         for clip_idx in range(rendered_videos):
             video = self.render_clip(cpu_frames[clip_idx])
