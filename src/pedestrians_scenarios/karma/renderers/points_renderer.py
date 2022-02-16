@@ -87,8 +87,8 @@ class PointsRenderer(Renderer):
             color_values = list(skeleton.get_colors().values())
 
         # if we know that skeleton has root point, we can draw it
-        root_idx = skeleton.get_root_point() if skeleton is not None else None
-        if root_idx is not None:
+        root_point = skeleton.get_root_point() if skeleton is not None else None
+        if root_point is not None:
             draw.rectangle(
                 [tuple(rounded_points[0] - 2), tuple(rounded_points[0] + 2)],
                 fill=color_values[0][:end],
@@ -96,7 +96,7 @@ class PointsRenderer(Renderer):
             )
 
         for idx, point in enumerate(rounded_points):
-            if idx == root_idx:
+            if idx == root_point.value:
                 continue
             draw.ellipse(
                 [tuple(point - 2), tuple(point + 2)],

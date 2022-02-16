@@ -14,12 +14,21 @@ class Skeleton(Enum):
         raise NotImplementedError()
 
     @classmethod
-    def get_edges(cls) -> List[Tuple[int, int]]:
+    def get_edges(cls) -> List[Tuple['Skeleton', 'Skeleton']]:
+        raise NotImplementedError()
+
+    # unify extraction of some points of interest
+    @classmethod
+    def get_root_point(cls) -> Union['Skeleton', None]:
+        return None
+
+    @classmethod
+    def get_neck_point(cls) -> Union['Skeleton', List['Skeleton']]:
         raise NotImplementedError()
 
     @classmethod
-    def get_root_point(cls) -> Union[int, None]:
-        return None
+    def get_hips_point(cls) -> Union['Skeleton', List['Skeleton']]:
+        raise NotImplementedError()
 
 
 class CARLA_SKELETON(Skeleton):
@@ -83,7 +92,7 @@ class CARLA_SKELETON(Skeleton):
         }
 
     @classmethod
-    def get_edges(cls) -> List[Tuple[int, int]]:
+    def get_edges(cls) -> List[Tuple['CARLA_SKELETON', 'CARLA_SKELETON']]:
         return [
             [CARLA_SKELETON.crl_hips__C, CARLA_SKELETON.crl_spine__C],
             [CARLA_SKELETON.crl_spine__C, CARLA_SKELETON.crl_spine01__C],
@@ -112,5 +121,13 @@ class CARLA_SKELETON(Skeleton):
         ]
 
     @classmethod
-    def get_root_point(cls) -> int:
-        return CARLA_SKELETON.crl_root.value
+    def get_root_point(cls) -> 'CARLA_SKELETON':
+        return CARLA_SKELETON.crl_root
+
+    @classmethod
+    def get_neck_point(cls) -> 'CARLA_SKELETON':
+        return CARLA_SKELETON.crl_neck__C
+
+    @classmethod
+    def get_hips_point(cls) -> 'CARLA_SKELETON':
+        return CARLA_SKELETON.crl_hips__C
