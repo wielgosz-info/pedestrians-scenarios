@@ -1,8 +1,28 @@
 from enum import Enum
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 
-class CARLA_SKELETON(Enum):
+class Skeleton(Enum):
+    """
+    Basic skeleton interface.
+    """
+    @classmethod
+    def get_colors(cls) -> Dict['Skeleton', Tuple[int, int, int, int]]:
+        # try to match OpenPose color scheme for easier visual comparison
+        # entries should be in the same order as in the enum,
+        # so that .values() returns the same order and can be used for indexing
+        raise NotImplementedError()
+
+    @classmethod
+    def get_edges(cls) -> List[Tuple[int, int]]:
+        raise NotImplementedError()
+
+    @classmethod
+    def get_root_point(cls) -> Union[int, None]:
+        return None
+
+
+class CARLA_SKELETON(Skeleton):
     crl_root = 0
     crl_hips__C = 1
     crl_spine__C = 2
