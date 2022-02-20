@@ -53,6 +53,9 @@ class BasicSinglePedestrianCrossing(Generator):
         This method is called before get_clip_pedestrians_control().
         It should not tick the world.
         """
+        if len(pedestrians) == 0:
+            return
+
         waypoint = camera_look_at[0]
 
         for pedestrian in pedestrians:
