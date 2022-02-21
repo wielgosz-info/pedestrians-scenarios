@@ -5,7 +5,7 @@ import numpy as np
 from pedestrians_scenarios.karma.karma_data_provider import KarmaDataProvider
 from pedestrians_scenarios.karma.utils.deepcopy import deepcopy_transform
 from pedestrians_scenarios.pedestrian_controls.basic_pedestrian_control import BasicPedestrianControl
-from .generator import Generator, PedestrianProfile
+from pedestrians_scenarios.datasets.generator import Generator, PedestrianProfile
 import pedestrians_scenarios.karma as km
 import carla
 
@@ -53,9 +53,6 @@ class BasicSinglePedestrianCrossing(Generator):
         This method is called before get_clip_pedestrians_control().
         It should not tick the world.
         """
-        if len(pedestrians) == 0:
-            return
-
         waypoint = camera_look_at[0]
 
         for pedestrian in pedestrians:
@@ -70,14 +67,19 @@ class BasicSinglePedestrianCrossing(Generator):
             pedestrian_transform.rotation.yaw = pedestrian_transform.rotation.yaw + delta
             pedestrian.set_transform(pedestrian_transform)
 
-    def get_clip_pedestrians_control(self, batch_idx: int, clip_idx: int, pedestrians: Iterable[km.Walker], profiles: Iterable[PedestrianProfile]) -> Iterable[BasicPedestrianControl]:
+    def get_clip_pedestrians_control(self, batch_idx: int, clip_idx: int, pedestrians: Iterable[km.Walker], profiles: Iterable[PedestrianProfile], camera_look_at: Iterable[carla.Transform]) -> Iterable[BasicPedestrianControl]:
         """
         Get the pedestrians controls for a single clip.
         """
+        waypoint = camera_look_at[0]
+
         controllers = []
         for pedestrian, profile in zip(pedestrians, profiles):
             controller = BasicPedestrianControl(pedestrian)
             controller.update_target_speed(self._rng.normal(
                 profile.crossing_speed.mean, profile.crossing_speed.std))
+            controller.update_waypoints([
+                waypoint
+            ])
             controllers.append(controller)
         return controllers

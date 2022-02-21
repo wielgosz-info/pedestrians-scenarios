@@ -190,21 +190,24 @@ class Generator(object):
         Get the camera look at points for each clip.
         By default, this will return a random, single camera position per clip.
         """
-        camera_look_at = []
-        for clip_idx, (clip_pedestrians, clip_camera_distances) in enumerate(zip(pedestrians, camera_distances)):
-            camera_look_at.append(self.get_clip_camera_look_at(
-                batch_idx, clip_idx, clip_pedestrians, clip_camera_distances))
-        return camera_look_at
+        return [
+            self.get_clip_camera_look_at(
+                batch_idx, clip_idx, clip_pedestrians, clip_camera_distances
+            )
+            for clip_idx, (clip_pedestrians, clip_camera_distances) in enumerate(zip(pedestrians, camera_distances))
+            if len(clip_pedestrians) > 0
+        ]
 
     def setup_pedestrians(self, batch_idx: int, pedestrians: Iterable[Iterable[km.Walker]], profiles: Iterable[Iterable[PedestrianProfile]], camera_look_at: Iterable[Iterable[carla.Transform]]) -> None:
         """
         Setup the pedestrians for a batch. It is called after the pedestrians are spawned in the world.
         """
         for clip_idx, (clip_pedestrians, clip_profiles, clip_look_at) in enumerate(zip(pedestrians, profiles, camera_look_at)):
-            self.setup_clip_pedestrians(
-                batch_idx, clip_idx, clip_pedestrians, clip_profiles, clip_look_at)
+            if len(clip_pedestrians) > 0:
+                self.setup_clip_pedestrians(
+                    batch_idx, clip_idx, clip_pedestrians, clip_profiles, clip_look_at)
 
-    def get_pedestrians_control(self, batch_idx: int, pedestrians: Iterable[Iterable[km.Walker]], profiles: Iterable[Iterable[PedestrianProfile]]) -> Iterable[Iterable[PedestrianControl]]:
+    def get_pedestrians_control(self, batch_idx: int, pedestrians: Iterable[Iterable[km.Walker]], profiles: Iterable[Iterable[PedestrianProfile]], camera_look_at: Iterable[Iterable[carla.Transform]]) -> Iterable[Iterable[PedestrianControl]]:
         """
         Sets up controllers for all pedestrians.
         :param batch_idx: [description]
@@ -213,17 +216,20 @@ class Generator(object):
         :type pedestrians: Iterable[Iterable[km.Walker]]
         :param profiles: [description]
         :type profiles: Iterable[Iterable[PedestrianProfile]]
+        :param camera_look_at: [description]
+        :type camera_look_at: Iterable[Iterable[carla.Transform]]
         :return: [description]
         :rtype: Iterable[Iterable[PedestrianControl]]
         """
         return [
             self.get_clip_pedestrians_control(
-                batch_idx, clip_idx, clip_pedestrians, clip_profiles
+                batch_idx, clip_idx, clip_pedestrians, clip_profiles, clip_look_at
             )
-            for clip_idx, (clip_pedestrians, clip_profiles) in enumerate(zip(pedestrians, profiles))
+            for clip_idx, (clip_pedestrians, clip_profiles, clip_look_at) in enumerate(zip(pedestrians, profiles, camera_look_at))
+            if len(clip_pedestrians) > 0
         ]
 
-    def get_clip_pedestrians_control(self, batch_idx: int, clip_idx: int, pedestrians: Iterable[km.Walker], profiles: Iterable[PedestrianProfile]) -> Iterable[PedestrianControl]:
+    def get_clip_pedestrians_control(self, batch_idx: int, clip_idx: int, pedestrians: Iterable[km.Walker], profiles: Iterable[PedestrianProfile], camera_look_at: Iterable[carla.Transform]) -> Iterable[PedestrianControl]:
         """
         Get the pedestrians controls for a single clip.
         """
@@ -338,7 +344,8 @@ class Generator(object):
         # apply settings to pedestrians
         self._karma.tick()
 
-        controllers = self.get_pedestrians_control(batch_idx, pedestrians, profiles)
+        controllers = self.get_pedestrians_control(
+            batch_idx, pedestrians, profiles, camera_look_at)
         for clip_controllers in controllers:
             for controller in clip_controllers:
                 self._karma.register_controller(controller)
@@ -381,13 +388,17 @@ class Generator(object):
             recorded_frames.append(clip_recorded_frames)
 
         # unregister controllers
+        reached_first_waypoint = []
         for clip_controllers in controllers:
+            clip_reached_first_waypoint = []
             for controller in clip_controllers:
                 self._karma.unregister_controller(controller)
+                clip_reached_first_waypoint.append(controller.reached_first_waypoint)
+            reached_first_waypoint.append(all(clip_reached_first_waypoint))
 
         # collect batch data
         batch_data = self.collect_batch_data(
-            map_name, profiles, spawn_points, models, pedestrians, camera_managers, recordings, recorded_frames, frame_data)
+            map_name, profiles, spawn_points, models, pedestrians, camera_managers, recordings, recorded_frames, frame_data, reached_first_waypoint)
 
         return batch_data
 
@@ -414,14 +425,13 @@ class Generator(object):
                     'frame.pedestrian.pose.component': convert_pose_dict_to_list(component_pose),
                     'frame.pedestrian.pose.relative': convert_pose_dict_to_list(relative_pose),
                 })
-                # TODO: add the actual data of interest for each frame - 3D pose, 2D pose
 
             clip_data.append(current_frame_data)
 
-    def collect_batch_data(self, map_name, profiles, spawn_points, models, pedestrians, camera_managers, recordings, recorded_frames, captured_data):
+    def collect_batch_data(self, map_name, profiles, spawn_points, models, pedestrians, camera_managers, recordings, recorded_frames, captured_data, reached_first_waypoint):
         batch_data = []
         for clip_idx in range(self._batch_size):
-            if not len(captured_data[clip_idx]):
+            if not len(captured_data[clip_idx]) or not reached_first_waypoint[clip_idx]:
                 continue
 
             clip_managers: Iterable[CamerasManager] = camera_managers[clip_idx]
@@ -503,7 +513,7 @@ class Generator(object):
                                     camera_transform,
                                     camera
                                 )
-                                full_frame_data['frame.camera.pose'] = convert_pose_2d_dict_to_list(
+                                full_frame_data['frame.pedestrian.pose.camera'] = convert_pose_2d_dict_to_list(
                                     camera_pose)
 
                             batch_data.append(full_frame_data)
