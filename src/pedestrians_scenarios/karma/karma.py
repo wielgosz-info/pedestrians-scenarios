@@ -78,7 +78,7 @@ class Karma(object):
                                help='Hostname or IP of the CARLA server (default: server)')
         subparser.add_argument('--port', default=2000, type=int,
                                help='TCP port to listen to (default: 2000)')
-        subparser.add_argument('--timeout', default=10.0, type=float,
+        subparser.add_argument('--timeout', default=20.0, type=float,
                                help='Set the CARLA client timeout value in seconds')
         subparser.add_argument('--traffic-manager-port', default=8000, type=int,
                                help='Port to use for the TrafficManager (default: 8000)')

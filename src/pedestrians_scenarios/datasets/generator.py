@@ -421,6 +421,9 @@ class Generator(object):
     def collect_batch_data(self, map_name, profiles, spawn_points, models, pedestrians, camera_managers, recordings, recorded_frames, captured_data):
         batch_data = []
         for clip_idx in range(self._batch_size):
+            if not len(captured_data[clip_idx]):
+                continue
+
             clip_managers: Iterable[CamerasManager] = camera_managers[clip_idx]
             clip_models: Iterable[str] = models[clip_idx]
             clip_profiles: Iterable[PedestrianProfile] = profiles[clip_idx]
