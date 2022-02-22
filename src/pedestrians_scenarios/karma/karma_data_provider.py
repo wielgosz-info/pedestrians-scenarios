@@ -1,4 +1,5 @@
 from functools import lru_cache
+import logging
 from queue import Empty, Queue
 from typing import List
 
@@ -34,8 +35,11 @@ class KarmaDataProvider(CarlaDataProvider):
     @staticmethod
     @lru_cache(maxsize=4)
     def get_pedestrian_blueprints_by_age_and_gender(age: str, gender: str):
-        return [bp.id for bp in KarmaDataProvider.get_blueprint_library().filter("walker.pedestrian.*")
-                if bp.get_attribute('age') == age and bp.get_attribute('gender') == gender]
+        bps = [bp.id for bp in KarmaDataProvider.get_blueprint_library().filter("walker.pedestrian.*")
+               if bp.get_attribute('age') == age and bp.get_attribute('gender') == gender]
+        logging.getLogger(__name__).debug(
+            f'Available {gender} {age} pedestrian blueprints: {bps}')
+        return bps
 
     @staticmethod
     def get_closest_driving_lane_waypoint(location: carla.Transform) -> carla.Waypoint:
@@ -192,8 +196,15 @@ class KarmaDataProvider(CarlaDataProvider):
     @staticmethod
     def get_available_maps():
         """
-        Get available map names.
+        Get available map names. Only non-layered maps are returned.
         """
         if not KarmaDataProvider._available_maps:
-            KarmaDataProvider._available_maps = CarlaDataProvider.get_client().get_available_maps()
+            KarmaDataProvider._available_maps = [
+                map_name
+                for map_name in CarlaDataProvider.get_client().get_available_maps()
+                if not map_name.endswith("_Opt")
+            ]
+            logging.getLogger(__name__).debug(
+                f'Available maps: {KarmaDataProvider._available_maps}')
+
         return KarmaDataProvider._available_maps

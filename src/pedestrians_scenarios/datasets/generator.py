@@ -306,6 +306,7 @@ class Generator(object):
         """
 
         outfile = os.path.join(self._outputs_dir, 'data.csv')
+        generated_clips = []
 
         with km.Karma(**self._kwargs) as karma:
             self._karma = karma
@@ -317,6 +318,10 @@ class Generator(object):
                 pd.DataFrame(batch_data).to_csv(outfile, mode='a',
                                                 header=(batch_idx == 0),
                                                 index=False)
+                generated_clips.append(len(batch_data))
+
+            logging.getLogger(__name__).info(
+                f'Generated {sum(generated_clips)} clips out of desired {self._number_of_clips}')
 
         self._karma = None
 
@@ -331,6 +336,12 @@ class Generator(object):
 
         # spawn pedestrians in world
         self._karma.tick()
+
+        # if no pedestrians, skip batch
+        if sum(len(pedestrians_per_clip) for pedestrians_per_clip in pedestrians) == 0:
+            logging.getLogger(__name__).info(
+                f'No pedestrians spawned in batch {batch_idx}, skipping.')
+            return []
 
         camera_distances = self.get_camera_distances(batch_idx)
         camera_look_at = self.get_camera_look_at(
@@ -431,7 +442,13 @@ class Generator(object):
     def collect_batch_data(self, map_name, profiles, spawn_points, models, pedestrians, camera_managers, recordings, recorded_frames, captured_data, reached_first_waypoint):
         batch_data = []
         for clip_idx in range(self._batch_size):
-            if not len(captured_data[clip_idx]) or not reached_first_waypoint[clip_idx]:
+            if not len(captured_data[clip_idx]):
+                logging.getLogger(__name__).info(
+                    f'No data was captured for clip {clip_idx}, skipping.')
+                continue
+            if not reached_first_waypoint[clip_idx]:
+                logging.getLogger(__name__).info(
+                    f'At least one of the pedestrians in {clip_idx} did not reach first waypoint, skipping.')
                 continue
 
             clip_managers: Iterable[CamerasManager] = camera_managers[clip_idx]
@@ -454,8 +471,8 @@ class Generator(object):
                     recordings[clip_idx]) else None
 
                 if recording is None:
-                    logging.getLogger(__name__).warning(
-                        f'No recording was created fot clip {clip_idx}, skipping.')
+                    logging.getLogger(__name__).info(
+                        f'No recording was created for clip {clip_idx} camera {manager_idx}, skipping.')
                     continue
 
                 clip_recorded_frames: Iterable[int] = sorted(
