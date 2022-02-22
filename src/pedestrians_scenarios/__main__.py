@@ -1,3 +1,3 @@
-from .skeleton import run
+from .cli import run
 
 run()

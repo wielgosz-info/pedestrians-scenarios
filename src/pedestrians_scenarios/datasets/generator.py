@@ -1,3 +1,4 @@
+import ast
 import logging
 import os
 import time
@@ -51,7 +52,7 @@ class Generator(object):
                  outputs_dir: str = './datasets',
                  number_of_clips: int = 512,
                  clip_length_in_frames: int = 600,
-                 pedestrian_distribution: Iterable[Tuple[PedestrianProfile, float]] = (
+                 pedestrian_distributions: Iterable[Tuple[PedestrianProfile, float]] = (
                      (ExamplePedestrianProfiles.adult_female.value, 0.25),
                      (ExamplePedestrianProfiles.adult_male.value, 0.25),
                      (ExamplePedestrianProfiles.child_female.value, 0.25),
@@ -70,10 +71,14 @@ class Generator(object):
         self._outputs_dir = outputs_dir
         os.makedirs(self._outputs_dir, exist_ok=True)
 
+        # handle complex config data
+        self._camera_distances_distributions = self.__parse_camera_position_distributions(
+            camera_position_distributions)
+        self._pedestrian_distribution = self.__parse_pedestrian_distributions(
+            pedestrian_distributions)
+
         self._number_of_clips = number_of_clips
         self._clip_length_in_frames = clip_length_in_frames
-        self._pedestrian_distribution = pedestrian_distribution
-        self._camera_distances_distributions = camera_position_distributions
         self._rng = km.KarmaDataProvider.get_rng()
         self._batch_size = batch_size
         self._camera_fov = camera_fov
@@ -84,18 +89,59 @@ class Generator(object):
         self._karma = None
         self._kwargs = kwargs
 
+    def __parse_camera_position_distributions(self, camera_position_distributions):
+        converted_camera_position_distributions = []
+        for i, camera in enumerate(camera_position_distributions):
+            if len(camera) != 3:
+                raise ValueError(
+                    f'Camera position distribution {i} should have exactly 3 elements (for x,y,z), got {len(distribution)}')
+            camera_distributions = []
+            for distribution in camera:
+                if isinstance(distribution, StandardDistribution):
+                    camera_distributions.append(distribution)
+                else:
+                    camera_distributions.append(StandardDistribution(*distribution))
+            converted_camera_position_distributions.append(camera_distributions)
+        return converted_camera_position_distributions
+
+    def __parse_pedestrian_distributions(self, pedestrian_distributions):
+        converted_pedestrian_distributions = []
+        for distribution in pedestrian_distributions:
+            profile, weight = distribution
+            if isinstance(profile, PedestrianProfile):
+                converted_pedestrian_distributions.append((profile, weight))
+            elif isinstance(profile, str):
+                converted_pedestrian_distributions.append(
+                    (ExamplePedestrianProfiles[profile].value, weight))
+            else:
+                assert len(
+                    profile) == 4, f'Pedestrian profile should have exactly 4 elements, got {len(profile)}'
+                (age, gender, (walking_speed_mean, walking_speed_std),
+                 (crossing_speed_mean, crossing_speed_std)) = profile
+                converted_pedestrian_distributions.append(
+                    (PedestrianProfile(
+                        age, gender,
+                        StandardDistribution(walking_speed_mean, walking_speed_std),
+                        StandardDistribution(crossing_speed_mean, crossing_speed_std)
+                    ), weight))
+        return converted_pedestrian_distributions
+
     @staticmethod
     def add_cli_args(parser):
         subparser = parser.add_argument_group("Generator")
 
         subparser.add_argument('--outputs-dir', default=None, type=str,
-                               help='Directory to store outputs (default: datasets)')
+                               help='Directory to store outputs (default: ./datasets).')
         subparser.add_argument('--number-of-clips', type=int, default=512,
                                help='Total number of clips to generate.')
         subparser.add_argument('--clip-length-in-frames', type=int, default=600,
                                help='Length of each clip in frames.')
         subparser.add_argument('--batch-size', type=int, default=16,
                                help='Number of clips in each batch.')
+        subparser.add_argument('--camera-fov', type=float, default=90.0,
+                               help='Camera horizontal FOV in degrees.')
+        subparser.add_argument('--camera-image-size', type=ast.literal_eval, default='(800,600)',
+                               help='Camera image size in pixels as a (width, height) tuple (default: (800,600)).')
 
         return parser
 

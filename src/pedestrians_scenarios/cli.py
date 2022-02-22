@@ -1,21 +1,15 @@
 import argparse
 import logging
 import sys
-import time
-from typing import List
+import yaml
+
+try:
+    from yaml import CLoader as Loader
+except ImportError:
+    from yaml import Loader
 
 from pedestrians_scenarios import __version__
-from pedestrians_scenarios.datasets.basic_crossing import BasicSinglePedestrianCrossing
-import pedestrians_scenarios.karma as km
-from pedestrians_scenarios.karma.utils.deepcopy import deepcopy_transform
-from pedestrians_scenarios.karma.cameras import CamerasManager, FramesMergingMathod
-from pedestrians_scenarios.karma.karma_data_provider import KarmaDataProvider
-import carla
-from tqdm.auto import trange
-import numpy as np
-from pedestrians_scenarios.pedestrian_controls import BasicPedestrianControl
-
-_logger = logging.getLogger(__name__)
+from pedestrians_scenarios.datasets.cli import add_datasets_cli_args
 
 
 # ---- CLI ----
@@ -30,7 +24,7 @@ def add_cli_args():
     Returns:
       :parser:`argparse.ArgumentParser`
     """
-    parser = argparse.ArgumentParser(description="Just a Fibonacci demonstration")
+    parser = argparse.ArgumentParser(description="Pedestrians scenarios")
     parser.add_argument(
         "--version",
         action="version",
@@ -52,6 +46,15 @@ def add_cli_args():
         action="store_const",
         const=logging.DEBUG,
     )
+
+    # handle specifying config file instead of CLI args
+    parser.add_argument(
+        "-c",
+        "--config",
+        help="Config file path. Settings in this file will override those passed via CLI",
+        default=None,
+    )
+
     return parser
 
 
@@ -69,15 +72,22 @@ def setup_logging(loglevel):
 
 def main(args):
     parser = add_cli_args()
-    parser = km.Karma.add_cli_args(parser)
-    parser = BasicSinglePedestrianCrossing.add_cli_args(parser)
+    subparsers = parser.add_subparsers()
+
+    # subcommands
+    add_datasets_cli_args(subparsers)
 
     args = parser.parse_args(args)
     kwargs = vars(args)
     setup_logging(args.loglevel)
 
-    gen = BasicSinglePedestrianCrossing(**kwargs)
-    gen.generate()
+    # handle config file
+    if args.config:
+        with open(args.config, 'r') as f:
+            kwargs.update(yaml.load(f, Loader=Loader))
+
+    # run subcommand
+    args.subcommand(**kwargs)
 
 
 def run():
