@@ -21,8 +21,7 @@ from pedestrians_scenarios.datasets.cli import add_datasets_cli_args
 def add_cli_args():
     """Prepares command line parameters.
 
-    Returns:
-      :parser:`argparse.ArgumentParser`
+    :rtype: argparse.ArgumentParser
     """
     parser = argparse.ArgumentParser(description="Pedestrians scenarios")
     parser.add_argument(
@@ -47,7 +46,12 @@ def add_cli_args():
         const=logging.DEBUG,
     )
 
-    # handle specifying config file instead of CLI args
+    return parser
+
+
+def add_common_subcommand_args(parser):
+    """Callback to add common arguments to a subcommand parser."""
+
     parser.add_argument(
         "-c",
         "--config",
@@ -61,8 +65,8 @@ def add_cli_args():
 def setup_logging(loglevel):
     """Setup basic logging
 
-    Args:
-      loglevel (int): minimum loglevel for emitting messages
+    :param loglevel: Minimum loglevel for emitting messages.
+    :type loglevel: int
     """
     logformat = "[%(asctime)s] %(levelname)s:%(name)s:%(message)s"
     logging.basicConfig(
@@ -75,7 +79,7 @@ def main(args):
     subparsers = parser.add_subparsers()
 
     # subcommands
-    add_datasets_cli_args(subparsers)
+    add_datasets_cli_args(subparsers, add_common_subcommand_args)
 
     args = parser.parse_args(args)
     kwargs = vars(args)

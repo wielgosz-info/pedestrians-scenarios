@@ -130,6 +130,8 @@ class KarmaDataProvider(CarlaDataProvider):
         KarmaDataProvider.get_rng().shuffle(pedestrian_spawn_points)
         KarmaDataProvider._pedestrian_spawn_points = pedestrian_spawn_points
         KarmaDataProvider._pedestrian_spawn_index = 0
+        logging.getLogger(__name__).debug(
+            f'Generated {len(pedestrian_spawn_points)} pedestrian spawn points.')
 
     @staticmethod
     def get_pedestrian_spawn_point():

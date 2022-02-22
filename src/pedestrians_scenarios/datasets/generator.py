@@ -208,8 +208,8 @@ class Generator(object):
                     in_clip.append(
                         km.Walker(model=model, spawn_point=spawn_point, tick=False))
             except RuntimeError:
-                logging.getLogger(__name__).warning(
-                    f'Failed to create pedestrians for clip {clip_idx} in batch {batch_idx}')
+                logging.getLogger(__name__).info(
+                    f'Failed to create pedestrians for clip {clip_idx} in batch {batch_idx}.')
             pedestrians.append(in_clip)
         return pedestrians
 

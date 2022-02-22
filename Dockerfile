@@ -17,6 +17,7 @@ RUN /venv/bin/python -m pip install --no-cache-dir \
     pims==0.5 \
     psutil==5.9.0 \
     py-trees==0.8.3 \
+    pyyaml==6.0 \
     scikit-image==0.18.3 \
     scipy==1.7.2 \
     Shapely==1.7.1 \

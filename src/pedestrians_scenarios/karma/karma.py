@@ -103,33 +103,36 @@ class Karma(object):
         return self.__world.tick()
 
     def reset_world(self, map_name=None):
-        prev_id = None
-
         if self.__world is not None:
             prev_id = self.__world.id
-            self.__world.remove_on_tick(self.__on_tick_callback_id)
+            prev_name = KarmaDataProvider.get_map().name
+        else:
+            prev_id = None
+            prev_name = None
 
-            if map_name is not None and KarmaDataProvider.get_map().name != map_name:
-                tries = int(self.__timeout)
-                while tries > 0:
-                    try:
-                        logging.getLogger(__name__).debug(
-                            f'Loading map {map_name}, {tries} tries left...')
-                        self.__client.load_world(map_name)
-                        logging.getLogger(__name__).debug(
-                            f'Loading map {map_name} succeeded.')
-                        tries = 0
-                    except RuntimeError:
-                        tries -= 1
-                        if tries > 0:
-                            time.sleep(1)
-                        else:
-                            raise
-            else:
-                logging.getLogger(__name__).debug(f'Reloading map {map_name}...')
-                self.__client.reload_world()
+        # clean up everything
+        self.close()
+        # reuse client
+        KarmaDataProvider.set_client(self.__client)
+
+        if self.__world is not None:
+            try:
+                if map_name is not None and prev_name != map_name:
+                    logging.getLogger(__name__).debug(
+                        f'Loading map {map_name}...')
+                    self.__client.load_world(map_name)
+                    logging.getLogger(__name__).debug(
+                        f'Loading map {map_name} succeeded.')
+                else:
+                    logging.getLogger(__name__).debug(f'Reloading map {map_name}...')
+                    self.__client.reload_world()
+                    logging.getLogger(__name__).debug(
+                        f'Reloading map {map_name} succeeded.')
+            except RuntimeError:
                 logging.getLogger(__name__).debug(
-                    f'Reloading map {map_name} succeeded.')
+                    f'(Re)Loading map {map_name} failed.')
+                # sleep for a bit to give server a chance, it will fail on getting the world if it's not loaded yet
+                time.sleep(10.0)
 
         logging.getLogger(__name__).debug(f'Getting world...')
         self.__world = self.__client.get_world()
@@ -151,8 +154,6 @@ class Karma(object):
 
         self.__world.set_pedestrians_seed(self.__seed)
 
-        KarmaDataProvider.cleanup()
-        KarmaDataProvider.set_client(self.__client)
         KarmaDataProvider.set_world(self.__world)
 
         self.__traffic_manager.set_synchronous_mode(True)
