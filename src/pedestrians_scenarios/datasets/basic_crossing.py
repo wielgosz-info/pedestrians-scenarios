@@ -5,12 +5,12 @@ import numpy as np
 from pedestrians_scenarios.karma.karma_data_provider import KarmaDataProvider
 from pedestrians_scenarios.karma.utils.deepcopy import deepcopy_transform
 from pedestrians_scenarios.pedestrian_controls.basic_pedestrian_control import BasicPedestrianControl
-from pedestrians_scenarios.datasets.generator import Generator, PedestrianProfile
+from pedestrians_scenarios.datasets.generator import Generator, BatchGenerator, PedestrianProfile
 import pedestrians_scenarios.karma as km
 import carla
 
 
-class BasicSinglePedestrianCrossing(Generator):
+class BasicSinglePedestrianCrossingBatch(BatchGenerator):
     """
     Creates dataset with randomized pedestrians crossing the street.
     Pedestrians are controlled by BasicPedestrianControl.
@@ -83,3 +83,7 @@ class BasicSinglePedestrianCrossing(Generator):
             ])
             controllers.append(controller)
         return controllers
+
+
+class BasicSinglePedestrianCrossing(Generator):
+    batch_generator = BasicSinglePedestrianCrossingBatch

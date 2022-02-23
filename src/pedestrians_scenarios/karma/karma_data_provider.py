@@ -29,7 +29,10 @@ class KarmaDataProvider(CarlaDataProvider):
         return CarlaDataProvider._blueprint_library
 
     @staticmethod
-    def get_rng() -> numpy.random.RandomState:
+    def get_rng(seed=None) -> numpy.random.RandomState:
+        if seed is not None:
+            CarlaDataProvider._random_seed = seed
+            CarlaDataProvider._rng = numpy.random.RandomState(seed)
         return CarlaDataProvider._rng
 
     @staticmethod
