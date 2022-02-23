@@ -240,9 +240,8 @@ class Generator(object):
         return [
             self.get_clip_camera_look_at(
                 batch_idx, clip_idx, clip_pedestrians, clip_camera_distances
-            )
+            ) if len(clip_pedestrians) > 0 else []
             for clip_idx, (clip_pedestrians, clip_camera_distances) in enumerate(zip(pedestrians, camera_distances))
-            if len(clip_pedestrians) > 0
         ]
 
     def setup_pedestrians(self, batch_idx: int, pedestrians: Iterable[Iterable[km.Walker]], profiles: Iterable[Iterable[PedestrianProfile]], camera_look_at: Iterable[Iterable[carla.Transform]]) -> None:
@@ -271,9 +270,8 @@ class Generator(object):
         return [
             self.get_clip_pedestrians_control(
                 batch_idx, clip_idx, clip_pedestrians, clip_profiles, clip_look_at
-            )
+            ) if len(clip_pedestrians) > 0 else []
             for clip_idx, (clip_pedestrians, clip_profiles, clip_look_at) in enumerate(zip(pedestrians, profiles, camera_look_at))
-            if len(clip_pedestrians) > 0
         ]
 
     def get_clip_pedestrians_control(self, batch_idx: int, clip_idx: int, pedestrians: Iterable[km.Walker], profiles: Iterable[PedestrianProfile], camera_look_at: Iterable[carla.Transform]) -> Iterable[PedestrianControl]:
@@ -452,7 +450,8 @@ class Generator(object):
             for controller in clip_controllers:
                 self._karma.unregister_controller(controller)
                 clip_reached_first_waypoint.append(controller.reached_first_waypoint)
-            reached_first_waypoint.append(all(clip_reached_first_waypoint))
+            reached_first_waypoint.append(
+                len(clip_reached_first_waypoint) > 0 and all(clip_reached_first_waypoint))
 
         # collect batch data
         batch_data = self.collect_batch_data(
@@ -489,7 +488,7 @@ class Generator(object):
     def collect_batch_data(self, map_name, profiles, spawn_points, models, pedestrians, camera_managers, recordings, recorded_frames, captured_data, reached_first_waypoint):
         batch_data = []
         for clip_idx in range(self._batch_size):
-            if not len(captured_data[clip_idx]):
+            if not sum(len(c) for c in captured_data[clip_idx]):
                 logging.getLogger(__name__).info(
                     f'No data was captured for clip {clip_idx}, skipping.')
                 continue
