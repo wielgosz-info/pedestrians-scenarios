@@ -4,7 +4,7 @@ import os
 import time
 from collections import namedtuple
 from enum import Enum
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Iterable, List, Tuple
 from uuid import uuid4
 import multiprocessing as mp
 
@@ -102,15 +102,14 @@ class BatchGenerator(mp.Process):
         no_of_generated_clips = 0
         with km.Karma(**self._kwargs) as karma:
             self._karma = karma
-            map_name = self.get_map_for_batch(self._batch_idx)
+            map_name = self.get_map_for_batch()
             karma.reset_world(map_name)
 
-            batch_data = self.generate_batch(map_name)
+            batch_data, no_of_generated_clips = self.generate_batch(map_name)
             with self._outfile_lock:
                 pd.DataFrame(batch_data).to_csv(self._outfile, mode='a',
                                                 header=(self._batch_idx == 0),
                                                 index=False)
-            no_of_generated_clips = len(batch_data)
 
         logging.getLogger(__name__).debug(
             f'Generated {no_of_generated_clips} clips.')
@@ -322,7 +321,7 @@ class BatchGenerator(mp.Process):
         if sum(len(pedestrians_per_clip) for pedestrians_per_clip in pedestrians) == 0:
             logging.getLogger(__name__).info(
                 f'No pedestrians spawned in batch {self._batch_idx}, skipping.')
-            return []
+            return [], 0
 
         camera_distances = self.get_camera_distances()
         camera_look_at = self.get_camera_look_at(
@@ -362,7 +361,7 @@ class BatchGenerator(mp.Process):
 
         # move simulation forward the required number of frames
         # and capture per-frame data
-        for _ in trange(self._clip_length_in_frames, desc='Frame'):
+        for _ in trange(self._clip_length_in_frames, desc='Frame', position=1, leave=False):
             self._karma.tick()
 
         # sleep for a little bit to let cameras & data capture finish recording
@@ -390,10 +389,10 @@ class BatchGenerator(mp.Process):
                 len(clip_reached_first_waypoint) > 0 and all(clip_reached_first_waypoint))
 
         # collect batch data
-        batch_data = self.collect_batch_data(
+        batch_data, clips_count = self.collect_batch_data(
             map_name, profiles, spawn_points, models, pedestrians, camera_managers, recordings, recorded_frames, frame_data, reached_first_waypoint)
 
-        return batch_data
+        return batch_data, clips_count
 
     def capture_frame_data(self, snapshot: carla.WorldSnapshot, pedestrians: Iterable[Iterable[km.Walker]], out_frame_data: Iterable[Iterable[Iterable[Dict]]]):
         """
@@ -421,8 +420,9 @@ class BatchGenerator(mp.Process):
 
             clip_data.append(current_frame_data)
 
-    def collect_batch_data(self, map_name, profiles, spawn_points, models, pedestrians, camera_managers, recordings, recorded_frames, captured_data, reached_first_waypoint):
+    def collect_batch_data(self, map_name, profiles, spawn_points, models, pedestrians, camera_managers, recordings, recorded_frames, captured_data, reached_first_waypoint) -> Tuple[List[Dict], int]:
         batch_data = []
+        clips_count = 0
         for clip_idx in range(self._batch_size):
             if not sum(len(c) for c in captured_data[clip_idx]):
                 logging.getLogger(__name__).info(
@@ -447,6 +447,7 @@ class BatchGenerator(mp.Process):
             ]
 
             clip_id = str(uuid4())  # make it unique in dataset
+            skipped = False
 
             for manager_idx, manager in enumerate(clip_managers):
                 recording: str = recordings[clip_idx][manager_idx] if len(
@@ -455,6 +456,7 @@ class BatchGenerator(mp.Process):
                 if recording is None:
                     logging.getLogger(__name__).info(
                         f'No recording was created for clip {clip_idx} camera {manager_idx}, skipping.')
+                    skipped = True
                     continue
 
                 clip_recorded_frames: Iterable[int] = sorted(
@@ -516,7 +518,9 @@ class BatchGenerator(mp.Process):
                                     camera_pose)
 
                             batch_data.append(full_frame_data)
-        return batch_data
+            if not skipped:
+                clips_count += 1
+        return batch_data, clips_count
 
 
 class Generator(object):
@@ -563,7 +567,6 @@ class Generator(object):
 
         self._total_batches = np.ceil(
             self._number_of_clips/self._batch_size).astype(int)
-        self._karma = None
         self._kwargs = kwargs
 
         mp.set_start_method('spawn')
@@ -635,39 +638,42 @@ class Generator(object):
 
         generated_clips = []
         batch_idx = 0
-        pbar = tqdm(total=self._total_batches, desc='Clips')
 
-        while sum(generated_clips) < self._number_of_clips and batch_idx < 2*self._total_batches:
-            seed = self._kwargs.get('seed', None)
-            batch_generation_process = self.batch_generator(
-                outfile=outfile,
-                outfile_lock=outfile_lock,
-                outputs_dir=self._outputs_dir,
-                queue=results_queue,
-                batch_idx=batch_idx,
-                batch_size=self._batch_size,
-                clip_length_in_frames=self._clip_length_in_frames,
-                pedestrian_distributions=self._pedestrian_distributions,
-                camera_distances_distributions=self._camera_distances_distributions,
-                camera_fov=self._camera_fov,
-                camera_image_size=self._camera_image_size,
-                **{
-                    **self._kwargs,
-                    'seed': seed + batch_idx if seed is not None else None
-                }
-            )
-            batch_generation_process.start()
-            batch_generation_process.join()
+        with tqdm(total=self._total_batches, desc='Clips', position=0) as pbar:
+            while sum(generated_clips) < self._number_of_clips and batch_idx < 2*self._total_batches:
+                # TODO: this has the potential for a 'real' multiprocessing if multiple servers are available
+                seed = self._kwargs.get('seed', None)
+                batch_generation_process = self.batch_generator(
+                    outfile=outfile,
+                    outfile_lock=outfile_lock,
+                    outputs_dir=self._outputs_dir,
+                    queue=results_queue,
+                    batch_idx=batch_idx,
+                    batch_size=self._batch_size,
+                    clip_length_in_frames=self._clip_length_in_frames,
+                    pedestrian_distributions=self._pedestrian_distributions,
+                    camera_distances_distributions=self._camera_distances_distributions,
+                    camera_fov=self._camera_fov,
+                    camera_image_size=self._camera_image_size,
+                    **{
+                        **self._kwargs,
+                        'seed': seed + batch_idx if seed is not None else None
+                    }
+                )
+                batch_generation_process.start()
+                batch_generation_process.join()
 
-            batch_idx += 1
+                batch_idx += 1
 
-            if results_queue.empty():
-                logging.getLogger(__name__).warning(
-                    f'Process failed for batch {batch_idx}')
-                continue
+                if results_queue.empty():
+                    logging.getLogger(__name__).warning(
+                        f'Process failed for batch {batch_idx}')
+                    # assume that the server will restart
+                    time.sleep(float(os.getenv('CARLA_SERVER_START_PERIOD', '30.0')))
+                    continue
 
-            generated_clips.append(results_queue.get())
-            pbar.update(1)
+                generated_clips.append(results_queue.get())
+                pbar.update(1)
 
         logging.getLogger(__name__).info(
             f'Generated {sum(generated_clips)} clips out of desired {self._number_of_clips}')

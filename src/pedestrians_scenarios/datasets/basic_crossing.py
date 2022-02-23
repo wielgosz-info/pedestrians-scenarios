@@ -22,7 +22,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
 
-    def get_clip_camera_look_at(self, batch_idx: int, clip_idx: int, pedestrians: Iterable[km.Walker], camera_distances: Iterable[float]) -> Iterable[carla.Transform]:
+    def get_clip_camera_look_at(self, clip_idx: int, pedestrians: Iterable[km.Walker], camera_distances: Iterable[float]) -> Iterable[carla.Transform]:
         """
         Get the camera look at points for a single clip.
         In BasicSinglePedestrianCrossing there can be only one pedestrian in the clip,
@@ -47,7 +47,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
 
         return camera_look_at
 
-    def setup_clip_pedestrians(self, batch_idx: int, clip_idx: int, pedestrians: Iterable[km.Walker], profiles: Iterable[PedestrianProfile], camera_look_at: Iterable[carla.Transform]) -> None:
+    def setup_clip_pedestrians(self, clip_idx: int, pedestrians: Iterable[km.Walker], profiles: Iterable[PedestrianProfile], camera_look_at: Iterable[carla.Transform]) -> None:
         """
         Setup the pedestrians in a single clip.
         This method is called before get_clip_pedestrians_control().
@@ -67,7 +67,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
             pedestrian_transform.rotation.yaw = pedestrian_transform.rotation.yaw + delta
             pedestrian.set_transform(pedestrian_transform)
 
-    def get_clip_pedestrians_control(self, batch_idx: int, clip_idx: int, pedestrians: Iterable[km.Walker], profiles: Iterable[PedestrianProfile], camera_look_at: Iterable[carla.Transform]) -> Iterable[BasicPedestrianControl]:
+    def get_clip_pedestrians_control(self, clip_idx: int, pedestrians: Iterable[km.Walker], profiles: Iterable[PedestrianProfile], camera_look_at: Iterable[carla.Transform]) -> Iterable[BasicPedestrianControl]:
         """
         Get the pedestrians controls for a single clip.
         """

@@ -138,10 +138,9 @@ class Karma(object):
                     logging.getLogger(__name__).debug(
                         f'(Re)loading map {map_name} failed, {tries} tries left.')
                     # Sleep for a bit to give server a chance.
-                    # Uses CARLA_SERVER_START_PERIOD env var to determine how long to wait.
                     # This is actually the only place when it makes sense to 'wait and see'.
                     # If timeout or other error occurs anywhere else it should be dealt with by the caller.
-                    time.sleep(float(os.getenv('CARLA_SERVER_START_PERIOD', '30.0')))
+                    time.sleep(self.__timeout)
 
         logging.getLogger(__name__).debug('Getting world...')
         self.__world = self.__client.get_world()
