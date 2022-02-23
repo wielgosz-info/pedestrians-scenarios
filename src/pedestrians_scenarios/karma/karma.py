@@ -37,14 +37,15 @@ class Karma(object):
         self,
         host='server',
         port=2000,
-        timeout=20.0,
+        timeout=None,
         traffic_manager_port=8000,
         seed=22752,
         fps=30.0,
         hybrid_physics_mode=False,
         **kwargs
     ) -> None:
-        self.__timeout = timeout
+        self.__timeout = timeout if timeout is not None else float(
+            os.getenv('CARLA_SERVER_START_PERIOD', '30.0'))
         self.__seed = seed
         self.__fps = fps
         self.__hybrid_physics_mode = hybrid_physics_mode
@@ -72,14 +73,14 @@ class Karma(object):
         """
         Adds Karma-specific command line arguments.
         """
-        subparser = parser.add_argument_group("Karma")
+        subparser = parser.add_argument_group('Karma')
 
         subparser.add_argument('--host', default='server',
                                help='Hostname or IP of the CARLA server (default: server)')
         subparser.add_argument('--port', default=2000, type=int,
                                help='TCP port to listen to (default: 2000)')
-        subparser.add_argument('--timeout', default=20.0, type=float,
-                               help='Set the CARLA client timeout value in seconds')
+        subparser.add_argument('--timeout', default=None, type=float,
+                               help='Set the CARLA client timeout value in seconds (default: CARLA_SERVER_START_PERIOD, usually 30.0)')
         subparser.add_argument('--traffic-manager-port', default=8000, type=int,
                                help='Port to use for the TrafficManager (default: 8000)')
         subparser.add_argument('--seed', default=22752, type=int,
@@ -111,30 +112,38 @@ class Karma(object):
             prev_name = None
 
         # clean up everything
-        self.close()
+        self.close(keep_client_alive=True)
         # reuse client
         KarmaDataProvider.set_client(self.__client)
 
         if self.__world is not None:
-            try:
-                if map_name is not None and prev_name != map_name:
+            tries = 3  # no point in trying more, the server is most probably dead
+            while tries > 0:
+                try:
+                    if map_name is not None and prev_name != map_name:
+                        logging.getLogger(__name__).debug(
+                            f'Loading map {map_name}...')
+                        self.__client.load_world(map_name)
+                        logging.getLogger(__name__).debug(
+                            f'Loading map {map_name} succeeded.')
+                    else:
+                        logging.getLogger(__name__).debug(
+                            f'Reloading map {map_name}...')
+                        self.__client.reload_world()
+                        logging.getLogger(__name__).debug(
+                            f'Reloading map {map_name} succeeded.')
+                    break
+                except RuntimeError:
+                    tries -= 1
                     logging.getLogger(__name__).debug(
-                        f'Loading map {map_name}...')
-                    self.__client.load_world(map_name)
-                    logging.getLogger(__name__).debug(
-                        f'Loading map {map_name} succeeded.')
-                else:
-                    logging.getLogger(__name__).debug(f'Reloading map {map_name}...')
-                    self.__client.reload_world()
-                    logging.getLogger(__name__).debug(
-                        f'Reloading map {map_name} succeeded.')
-            except RuntimeError:
-                logging.getLogger(__name__).debug(
-                    f'(Re)Loading map {map_name} failed.')
-                # sleep for a bit to give server a chance, it will fail on getting the world if it's not loaded yet
-                time.sleep(10.0)
+                        f'(Re)loading map {map_name} failed, {tries} tries left.')
+                    # Sleep for a bit to give server a chance.
+                    # Uses CARLA_SERVER_START_PERIOD env var to determine how long to wait.
+                    # This is actually the only place when it makes sense to 'wait and see'.
+                    # If timeout or other error occurs anywhere else it should be dealt with by the caller.
+                    time.sleep(float(os.getenv('CARLA_SERVER_START_PERIOD', '30.0')))
 
-        logging.getLogger(__name__).debug(f'Getting world...')
+        logging.getLogger(__name__).debug('Getting world...')
         self.__world = self.__client.get_world()
         tries = int(self.__timeout)
         while prev_id == self.__world.id and tries > 0:
@@ -142,8 +151,8 @@ class Karma(object):
             time.sleep(1)
             self.__world = self.__client.get_world()
         if tries < 1:
-            raise RuntimeError("Could not reset world.")
-        logging.getLogger(__name__).debug(f'Getting world succeeded.')
+            raise RuntimeError('Could not reset world.')
+        logging.getLogger(__name__).debug('Getting world succeeded.')
 
         # always reset settings
         settings = carla.WorldSettings()
@@ -151,21 +160,26 @@ class Karma(object):
         settings.fixed_delta_seconds = 1.0 / self.__fps
         settings.deterministic_ragdolls = True
         self.__world.apply_settings(settings)
+        logging.getLogger(__name__).debug(f'World settings applied: {settings}.')
 
         self.__world.set_pedestrians_seed(self.__seed)
+        logging.getLogger(__name__).debug('Pedestrians seed set.')
 
         KarmaDataProvider.set_world(self.__world)
 
         self.__traffic_manager.set_synchronous_mode(True)
         self.__traffic_manager.set_random_device_seed(self.__seed)
         self.__traffic_manager.set_hybrid_physics_mode(self.__hybrid_physics_mode)
+        logging.getLogger(__name__).debug('Traffic manager settings applied.')
 
         self.__on_tick_callback_id = self.__world.on_tick(self.on_carla_tick)
+        logging.getLogger(__name__).debug('On world tick callback registered.')
 
         for callback in self.__registered_callbacks[KarmaStage.reload].copy().values():
             callback()
+        logging.getLogger(__name__).debug('All reload callbacks called.')
 
-    def close(self):
+    def close(self, keep_client_alive=False):
         KarmaDataProvider.cleanup()
 
         # are there any registered tick callbacks?
@@ -175,6 +189,7 @@ class Karma(object):
 
         for callback in self.__registered_callbacks[KarmaStage.close].copy().values():
             callback()
+        logging.getLogger(__name__).debug('All close callbacks called.')
 
         if self.__world:
             self.__world.remove_on_tick(self.__on_tick_callback_id)
@@ -182,8 +197,15 @@ class Karma(object):
                 synchronous_mode=False,
                 fixed_delta_seconds=0.0
             ))
+            logging.getLogger(__name__).debug('World settings reset.')
         if self.__traffic_manager:
             self.__traffic_manager.set_synchronous_mode(False)
+            logging.getLogger(__name__).debug('Traffic manager settings reset.')
+
+        if not keep_client_alive:
+            del self.__client
+            self.__client = None
+            logging.getLogger(__name__).debug('Client stopped.')
 
     def on_carla_tick(self, snapshot: carla.WorldSnapshot):
         KarmaDataProvider.on_carla_tick(snapshot)

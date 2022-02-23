@@ -21,4 +21,5 @@ services:
       - outputs:/outputs
     environment:
       COMMIT: ${COMMIT}
+      CARLA_SERVER_START_PERIOD: ${CARLA_SERVER_START_PERIOD:-30}
     shm_size: ${SHM_SIZE:-2gb}

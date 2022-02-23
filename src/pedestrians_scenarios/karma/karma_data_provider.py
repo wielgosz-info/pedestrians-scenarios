@@ -35,7 +35,7 @@ class KarmaDataProvider(CarlaDataProvider):
     @staticmethod
     @lru_cache(maxsize=4)
     def get_pedestrian_blueprints_by_age_and_gender(age: str, gender: str):
-        bps = [bp.id for bp in KarmaDataProvider.get_blueprint_library().filter("walker.pedestrian.*")
+        bps = [bp.id for bp in KarmaDataProvider.get_blueprint_library().filter('walker.pedestrian.*')
                if bp.get_attribute('age') == age and bp.get_attribute('gender') == gender]
         logging.getLogger(__name__).debug(
             f'Available {gender} {age} pedestrian blueprints: {bps}')
@@ -86,7 +86,7 @@ class KarmaDataProvider(CarlaDataProvider):
         sensor = KarmaDataProvider.get_world().try_spawn_actor(blueprint, spawn_point)
 
         if sensor is None:
-            print("WARNING: Cannot spawn sensor {} at position {}".format(
+            print('WARNING: Cannot spawn sensor {} at position {}'.format(
                 blueprint.id, spawn_point.location))
             return None
 
@@ -115,6 +115,7 @@ class KarmaDataProvider(CarlaDataProvider):
     @staticmethod
     def set_world(world):
         CarlaDataProvider.set_world(world)
+        logging.getLogger(__name__).debug('CarlaDataProvider.set_world succeeded.')
 
         # Initialize pedestrian spawn points
         KarmaDataProvider.generate_pedestrian_spawn_points()
@@ -136,7 +137,7 @@ class KarmaDataProvider(CarlaDataProvider):
     @staticmethod
     def get_pedestrian_spawn_point():
         if KarmaDataProvider._pedestrian_spawn_index >= len(KarmaDataProvider._pedestrian_spawn_points):
-            raise RuntimeError("No more pedestrian spawn points to use")
+            raise RuntimeError('No more pedestrian spawn points to use')
         else:
             spawn_point = KarmaDataProvider._pedestrian_spawn_points[
                 KarmaDataProvider._pedestrian_spawn_index]
@@ -204,7 +205,7 @@ class KarmaDataProvider(CarlaDataProvider):
             KarmaDataProvider._available_maps = [
                 map_name
                 for map_name in CarlaDataProvider.get_client().get_available_maps()
-                if not map_name.endswith("_Opt")
+                if not map_name.endswith('_Opt')
             ]
             logging.getLogger(__name__).debug(
                 f'Available maps: {KarmaDataProvider._available_maps}')

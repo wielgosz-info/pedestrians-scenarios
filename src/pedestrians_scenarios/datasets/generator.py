@@ -69,7 +69,8 @@ class Generator(object):
                  **kwargs
                  ) -> None:
         self._outputs_dir = outputs_dir
-        os.makedirs(self._outputs_dir, exist_ok=True)
+        # Ensure that the output directory exists AND is empty
+        os.makedirs(self._outputs_dir, exist_ok=False)
 
         # handle complex config data
         self._camera_distances_distributions = self.__parse_camera_position_distributions(
@@ -128,7 +129,7 @@ class Generator(object):
 
     @staticmethod
     def add_cli_args(parser):
-        subparser = parser.add_argument_group("Generator")
+        subparser = parser.add_argument_group('Generator')
 
         subparser.add_argument('--outputs-dir', default=None, type=str,
                                help='Directory to store outputs (default: ./datasets).')
@@ -355,8 +356,8 @@ class Generator(object):
         generated_clips = []
 
         with km.Karma(**self._kwargs) as karma:
-            self._karma = karma
-            for batch_idx in trange(self._total_batches, desc="Batch"):
+            for batch_idx in trange(self._total_batches, desc='Batch'):
+                self._karma = karma
                 map_name = self.get_map_for_batch(batch_idx)
                 karma.reset_world(map_name)
 
@@ -366,8 +367,8 @@ class Generator(object):
                                                 index=False)
                 generated_clips.append(len(batch_data))
 
-            logging.getLogger(__name__).info(
-                f'Generated {sum(generated_clips)} clips out of desired {self._number_of_clips}')
+        logging.getLogger(__name__).info(
+            f'Generated {sum(generated_clips)} clips out of desired {self._number_of_clips}')
 
         self._karma = None
 
@@ -427,7 +428,7 @@ class Generator(object):
 
         # move simulation forward the required number of frames
         # and capture per-frame data
-        for _ in trange(self._clip_length_in_frames, desc="Frame"):
+        for _ in trange(self._clip_length_in_frames, desc='Frame'):
             self._karma.tick()
 
         # sleep for a little bit to let cameras & data capture finish recording
@@ -551,8 +552,8 @@ class Generator(object):
                             } for p in range(len(clip_pedestrians))]
 
                         for pedestrian_idx, (profile, model, spawn_point, pedestrian) in enumerate(zip(clip_profiles, clip_models, clip_spawn_points, clip_pedestrians)):
-                            assert frame[pedestrian_idx]['frame.pedestrian.id'] == pedestrian.id, "Pedestrian ID mismatch"
-                            assert frame[pedestrian_idx]['world.frame'] == world_frame, "World frame mismatch"
+                            assert frame[pedestrian_idx]['frame.pedestrian.id'] == pedestrian.id, 'Pedestrian ID mismatch'
+                            assert frame[pedestrian_idx]['world.frame'] == world_frame, 'World frame mismatch'
 
                             full_frame_data = {
                                 'id': clip_id,
