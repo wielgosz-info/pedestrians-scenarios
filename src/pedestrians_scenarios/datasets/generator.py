@@ -517,6 +517,8 @@ class BatchGenerator(mp.Process):
                                 full_frame_data['frame.pedestrian.pose.camera'] = convert_pose_2d_dict_to_list(
                                     camera_pose)
 
+                            del full_frame_data['frame.pedestrian.id']
+
                             batch_data.append(full_frame_data)
             if not skipped:
                 clips_count += 1
@@ -638,9 +640,14 @@ class Generator(object):
 
         generated_clips = []
         batch_idx = 0
+        failed = 0
+        server_failed = 0
 
-        with tqdm(total=self._total_batches, desc='Clips', position=0) as pbar:
+        with tqdm(total=self._number_of_clips, desc='Clips', position=0, postfix={'failed': 0}) as pbar:
             while sum(generated_clips) < self._number_of_clips and batch_idx < 2*self._total_batches:
+                failed = batch_idx - sum(generated_clips)
+                pbar.set_postfix(failed=failed)
+
                 # TODO: this has the potential for a 'real' multiprocessing if multiple servers are available
                 seed = self._kwargs.get('seed', None)
                 batch_generation_process = self.batch_generator(
@@ -668,12 +675,15 @@ class Generator(object):
                 if results_queue.empty():
                     logging.getLogger(__name__).warning(
                         f'Process failed for batch {batch_idx}')
+                    server_failed += 1
                     # assume that the server will restart
                     time.sleep(float(os.getenv('CARLA_SERVER_START_PERIOD', '30.0')))
                     continue
 
                 generated_clips.append(results_queue.get())
-                pbar.update(1)
+
+                if generated_clips[-1] > 0:
+                    pbar.update(generated_clips[-1])
 
         logging.getLogger(__name__).info(
-            f'Generated {sum(generated_clips)} clips out of desired {self._number_of_clips}')
+            f'Generated {sum(generated_clips)} clips out of desired {self._number_of_clips}. Batch generation failed {failed} times, including {server_failed} server failures/timeouts.')
