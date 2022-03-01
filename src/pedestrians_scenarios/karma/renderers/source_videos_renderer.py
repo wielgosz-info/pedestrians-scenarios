@@ -13,12 +13,18 @@ from .points_renderer import PointsRenderer
 
 
 class SourceVideosRenderer(Renderer):
-    def __init__(self, data_dir: str, **kwargs) -> None:
+    def __init__(self, data_dir: str, overlay_skeletons: bool = False, **kwargs) -> None:
         super().__init__(**kwargs)
 
         self.__data_dir = data_dir
+        self.__overlay_skeletons = overlay_skeletons
+
+    @property
+    def overlay_skeletons(self) -> bool:
+        return self.__overlay_skeletons
 
     def render(self, meta: List[Dict[str, Any]], **kwargs) -> List[np.ndarray]:
+        # TODO: bboxes/skeletons should be in targets, not meta?
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         rendered_videos = len(meta['video_id'])
@@ -46,7 +52,7 @@ class SourceVideosRenderer(Renderer):
         canvas = np.zeros((end_frame - start_frame, canvas_height,
                           canvas_width, 3), dtype=np.uint8)
 
-        paths = glob.glob(os.path.join(self.__data_dir, '{}.*'.format(video_id)))
+        paths = glob.glob(os.path.join(self.__data_dir, '{}.*'.format(os.path.splitext(video_id)[0])))
         try:
             assert len(paths) == 1
             with pims.PyAVReaderIndexed(paths[0]) as video:
@@ -71,7 +77,7 @@ class SourceVideosRenderer(Renderer):
                                           'keypoints': np.array(sk['keypoints'][idx], np.int32),
                                           'color': sk['color'],
                                           'type': sk['type']
-                                      } for sk in skeletons] if skeletons is not None else None)
+                                      } for sk in skeletons] if skeletons is not None and self.__overlay_skeletons else None)
         except AssertionError:
             # no video or multiple candidates - skip
             logging.getLogger(__name__).warn(

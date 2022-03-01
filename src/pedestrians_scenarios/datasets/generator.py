@@ -498,6 +498,8 @@ class BatchGenerator(mp.Process):
                                 'camera.idx': camera_idx,
                                 'camera.recording': f'clips/{recording}-{camera_idx}.mp4',
                                 'camera.transform': convert_transform_to_list(camera_transform),
+                                'camera.width': self._camera_image_size[0],
+                                'camera.height': self._camera_image_size[1],
                                 'pedestrian.idx': pedestrian_idx,
                                 'pedestrian.model': model,
                                 'pedestrian.age': profile.age,
