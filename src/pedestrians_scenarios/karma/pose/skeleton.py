@@ -1,5 +1,14 @@
 from enum import Enum
+from functools import lru_cache
 from typing import Dict, List, Tuple, Union
+import numpy as np
+
+try:
+    from scipy.sparse import coo_matrix
+    import torch
+    import torch_geometric
+except ImportError:
+    pass
 
 
 class Skeleton(Enum):
@@ -29,6 +38,20 @@ class Skeleton(Enum):
     @classmethod
     def get_hips_point(cls) -> Union['Skeleton', List['Skeleton']]:
         raise NotImplementedError()
+
+    @classmethod
+    def get_edge_index(cls) -> torch.Tensor:
+        """
+        Helper function to get the edge index of the skeleton in the torch geometric format.
+        """
+
+        row = [edge[0].value for edge in cls.get_edges()]
+        col = [edge[1].value for edge in cls.get_edges()]
+        data = np.ones(len(row))
+        sparse_mtx = coo_matrix((data, (row, col)), shape=(26, 26))
+        edge_index, edge_attrs = torch_geometric.utils.from_scipy_sparse_matrix(
+            sparse_mtx)
+        return edge_index
 
 
 class CARLA_SKELETON(Skeleton):
