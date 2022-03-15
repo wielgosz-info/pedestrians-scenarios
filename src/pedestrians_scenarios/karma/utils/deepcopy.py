@@ -1,7 +1,12 @@
 """
 Provide a deepcopy functions for the basic carla objects.
 """
-import carla
+try:
+    import carla
+except ModuleNotFoundError:
+    from . import mock_carla as carla
+    import warnings
+    warnings.warn("Using mock carla.", ImportWarning)
 
 
 def deepcopy_location(v: carla.Location) -> carla.Location:

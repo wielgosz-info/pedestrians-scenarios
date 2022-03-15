@@ -1,5 +1,4 @@
 from enum import Enum
-from functools import lru_cache
 from typing import Dict, List, Tuple, Union
 import numpy as np
 
@@ -44,6 +43,8 @@ class Skeleton(Enum):
         """
         Helper function to get the edge index of the skeleton in the torch geometric format.
         """
+        if cls._edge_index is not None:
+            return cls._edge_index
 
         row = [edge[0].value for edge in cls.get_edges()] + \
             [edge[1].value for edge in cls.get_edges()]
@@ -53,7 +54,9 @@ class Skeleton(Enum):
         sparse_mtx = coo_matrix((data, (row, col)), shape=(26, 26))
         edge_index, edge_attrs = torch_geometric.utils.from_scipy_sparse_matrix(
             sparse_mtx)
-        return edge_index
+        cls._edge_index = edge_index
+        
+        return cls._edge_index
 
 
 class CARLA_SKELETON(Skeleton):

@@ -1,6 +1,12 @@
-from typing import Tuple, Union
-import carla
+from typing import Union
 from scipy.spatial.transform import Rotation
+
+try:
+    import carla
+except ModuleNotFoundError:
+    from . import mock_carla as carla
+    import warnings
+    warnings.warn("Using mock carla.", ImportWarning)
 
 
 def carla_to_scipy_rotation(rotation: Union[carla.Rotation, carla.Transform]) -> Rotation:

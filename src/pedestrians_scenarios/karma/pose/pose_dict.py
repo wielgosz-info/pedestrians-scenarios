@@ -1,16 +1,13 @@
 from typing import Dict, List, Tuple, Union
 
 import carla
-from pedestrians_scenarios import karma as km
+from pedestrians_scenarios.karma.walker import Walker
 from pedestrians_scenarios.karma.utils.conversions import convert_list_to_transform, convert_list_to_vector2d, convert_transform_to_list, convert_vector2d_to_list
 
 from .skeleton import CARLA_SKELETON
+from .types import PoseDict, Pose2DDict
 
-PoseDict = Dict[CARLA_SKELETON, carla.Transform]
-Pose2DDict = Dict[CARLA_SKELETON, carla.Vector2D]
-
-
-def get_pedestrian_pose_dicts(pedestrian: Union[km.Walker, carla.Walker]) -> Tuple[PoseDict, PoseDict, PoseDict]:
+def get_pedestrian_pose_dicts(pedestrian: Union[Walker, carla.Walker]) -> Tuple[PoseDict, PoseDict, PoseDict]:
     # TODO: should this be here or cached as a part of KarmaDataProvider?
     bones = pedestrian.get_bones().bone_transforms
 

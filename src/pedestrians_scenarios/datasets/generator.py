@@ -14,6 +14,9 @@ import pandas as pd
 import pedestrians_scenarios.karma as km
 from pedestrians_scenarios.karma.cameras import (
     CamerasManager, FramesMergingMathod)
+from pedestrians_scenarios.karma.karma import Karma, KarmaStage
+from pedestrians_scenarios.karma.karma_data_provider import KarmaDataProvider
+from pedestrians_scenarios.karma.walker import Walker
 from pedestrians_scenarios.karma.pose.pose_dict import convert_list_to_pose_dict, convert_pose_2d_dict_to_list, convert_pose_dict_to_list, get_pedestrian_pose_dicts
 from srunner.scenariomanager.actorcontrols.pedestrian_control import \
     PedestrianControl
@@ -84,7 +87,7 @@ class BatchGenerator(mp.Process):
         self._outputs_dir = outputs_dir
         self._queue = queue
 
-        self._rng = km.KarmaDataProvider.get_rng(seed)
+        self._rng = KarmaDataProvider.get_rng(seed)
 
         self._batch_idx = batch_idx
         self._batch_size = batch_size
@@ -100,7 +103,7 @@ class BatchGenerator(mp.Process):
 
     def run(self) -> None:
         no_of_generated_clips = 0
-        with km.Karma(**self._kwargs) as karma:
+        with Karma(**self._kwargs) as karma:
             self._karma = karma
             map_name = self.get_map_for_batch()
             karma.reset_world(map_name)
@@ -138,7 +141,7 @@ class BatchGenerator(mp.Process):
         for clip_profiles in profiles:
             in_clip = []
             for _ in clip_profiles:
-                in_clip.append(km.KarmaDataProvider.get_pedestrian_spawn_point())
+                in_clip.append(KarmaDataProvider.get_pedestrian_spawn_point())
             spawn_points.append(in_clip)
         return spawn_points
 
@@ -151,12 +154,12 @@ class BatchGenerator(mp.Process):
         """
         return [
             [
-                km.Walker.get_model_by_age_and_gender(profile.age, profile.gender)
+                Walker.get_model_by_age_and_gender(profile.age, profile.gender)
                 for profile in clip_profiles
             ] for clip_profiles in profiles
         ]
 
-    def get_pedestrians(self, models: Iterable[Iterable[str]], spawn_points: Iterable[Iterable[carla.Transform]]) -> Iterable[Iterable[km.Walker]]:
+    def get_pedestrians(self, models: Iterable[Iterable[str]], spawn_points: Iterable[Iterable[carla.Transform]]) -> Iterable[Iterable[Walker]]:
         """
         Generate pedestrians for a batch.
         In general, this should not tick the world, but rather just create the pedestrians.
@@ -167,7 +170,7 @@ class BatchGenerator(mp.Process):
         :param spawn_points: [description]
         :type spawn_points: Iterable[Iterable[carla.Transform]]
         :return: [description]
-        :rtype: Iterable[Iterable[km.Walker]]
+        :rtype: Iterable[Iterable[Walker]]
         """
         pedestrians = []
         for clip_idx, (clip_models, clip_spawn_points) in enumerate(zip(models, spawn_points)):
@@ -175,7 +178,7 @@ class BatchGenerator(mp.Process):
             try:
                 for model, spawn_point in zip(clip_models, clip_spawn_points):
                     in_clip.append(
-                        km.Walker(model=model, spawn_point=spawn_point, tick=False))
+                        Walker(model=model, spawn_point=spawn_point, tick=False))
             except RuntimeError:
                 logging.getLogger(__name__).info(
                     f'Failed to create pedestrians for clip {clip_idx} in batch {self._batch_idx}.')
@@ -200,7 +203,7 @@ class BatchGenerator(mp.Process):
             distances.append(list(zip(*camera_distances)))
         return list(zip(*distances))
 
-    def get_camera_look_at(self, pedestrians: Iterable[Iterable[km.Walker]], camera_distances: Iterable[Iterable[float]]) -> Iterable[Iterable[carla.Transform]]:
+    def get_camera_look_at(self, pedestrians: Iterable[Iterable[Walker]], camera_distances: Iterable[Iterable[float]]) -> Iterable[Iterable[carla.Transform]]:
         """
         Get the camera look at points for each clip.
         By default, this will return a random, single camera position per clip.
@@ -211,7 +214,7 @@ class BatchGenerator(mp.Process):
             for clip_idx, (clip_pedestrians, clip_camera_distances) in enumerate(zip(pedestrians, camera_distances))
         ]
 
-    def setup_pedestrians(self, pedestrians: Iterable[Iterable[km.Walker]], profiles: Iterable[Iterable[PedestrianProfile]], camera_look_at: Iterable[Iterable[carla.Transform]]) -> None:
+    def setup_pedestrians(self, pedestrians: Iterable[Iterable[Walker]], profiles: Iterable[Iterable[PedestrianProfile]], camera_look_at: Iterable[Iterable[carla.Transform]]) -> None:
         """
         Setup the pedestrians for a batch. It is called after the pedestrians are spawned in the world.
         """
@@ -220,11 +223,11 @@ class BatchGenerator(mp.Process):
                 self.setup_clip_pedestrians(
                     clip_idx, clip_pedestrians, clip_profiles, clip_look_at)
 
-    def get_pedestrians_control(self, pedestrians: Iterable[Iterable[km.Walker]], profiles: Iterable[Iterable[PedestrianProfile]], camera_look_at: Iterable[Iterable[carla.Transform]]) -> Iterable[Iterable[PedestrianControl]]:
+    def get_pedestrians_control(self, pedestrians: Iterable[Iterable[Walker]], profiles: Iterable[Iterable[PedestrianProfile]], camera_look_at: Iterable[Iterable[carla.Transform]]) -> Iterable[Iterable[PedestrianControl]]:
         """
         Sets up controllers for all pedestrians.
         :param pedestrians: [description]
-        :type pedestrians: Iterable[Iterable[km.Walker]]
+        :type pedestrians: Iterable[Iterable[Walker]]
         :param profiles: [description]
         :type profiles: Iterable[Iterable[PedestrianProfile]]
         :param camera_look_at: [description]
@@ -238,19 +241,19 @@ class BatchGenerator(mp.Process):
             for clip_idx, (clip_pedestrians, clip_profiles, clip_look_at) in enumerate(zip(pedestrians, profiles, camera_look_at))
         ]
 
-    def get_clip_pedestrians_control(self, clip_idx: int, pedestrians: Iterable[km.Walker], profiles: Iterable[PedestrianProfile], camera_look_at: Iterable[carla.Transform]) -> Iterable[PedestrianControl]:
+    def get_clip_pedestrians_control(self, clip_idx: int, pedestrians: Iterable[Walker], profiles: Iterable[PedestrianProfile], camera_look_at: Iterable[carla.Transform]) -> Iterable[PedestrianControl]:
         """
         Get the pedestrians controls for a single clip.
         """
         raise NotImplementedError()
 
-    def setup_clip_pedestrians(self, clip_idx: int, pedestrians: Iterable[km.Walker], profiles: Iterable[PedestrianProfile], camera_look_at: Iterable[carla.Transform]) -> None:
+    def setup_clip_pedestrians(self, clip_idx: int, pedestrians: Iterable[Walker], profiles: Iterable[PedestrianProfile], camera_look_at: Iterable[carla.Transform]) -> None:
         """
         Setup the pedestrians in a single clip.
         """
         raise NotImplementedError()
 
-    def get_clip_camera_look_at(self, clip_idx: int, pedestrians: Iterable[km.Walker], camera_distances: Iterable[float]) -> Iterable[carla.Transform]:
+    def get_clip_camera_look_at(self, clip_idx: int, pedestrians: Iterable[Walker], camera_distances: Iterable[float]) -> Iterable[carla.Transform]:
         """
         Get the camera look at points for a single clip.
         """
@@ -260,7 +263,7 @@ class BatchGenerator(mp.Process):
         self,
         camera_look_at: Iterable[Iterable[carla.Transform]],
         camera_distances: Iterable[Iterable[float]],
-        pedestrians: Iterable[Iterable[km.Walker]]
+        pedestrians: Iterable[Iterable[Walker]]
     ) -> Iterable[Iterable[CamerasManager]]:
         """
         Get camera managers for batch. By default this will create a single
@@ -279,7 +282,7 @@ class BatchGenerator(mp.Process):
                                                           ))
         return managers
 
-    def get_clip_camera_managers(self, clip_idx: int, camera_look_at: Iterable[carla.Transform], camera_distances: Iterable[float], pedestrians: Iterable[km.Walker]) -> Iterable[CamerasManager]:
+    def get_clip_camera_managers(self, clip_idx: int, camera_look_at: Iterable[carla.Transform], camera_distances: Iterable[float], pedestrians: Iterable[Walker]) -> Iterable[CamerasManager]:
         """
         Get the camera managers for a single clip. By default all created cameras are FreeCamera.
         This method ticks the world since cameras have to be spawned to attach event listeners.
@@ -303,7 +306,7 @@ class BatchGenerator(mp.Process):
         """
         Get the map for a batch. All pedestrians in batch will be spawned in the same world at the same time.
         """
-        return self._rng.choice(km.KarmaDataProvider.get_available_maps())
+        return self._rng.choice(KarmaDataProvider.get_available_maps())
 
     def generate_batch(self, map_name: str) -> Iterable[Dict]:
         """
@@ -357,7 +360,7 @@ class BatchGenerator(mp.Process):
         # prepare data capture callback
         frame_data = [[] for _ in range(self._batch_size)]
         capture_callback_id = self._karma.register_callback(
-            km.KarmaStage.tick, lambda snapshot: self.capture_frame_data(snapshot, pedestrians, frame_data))
+            KarmaStage.tick, lambda snapshot: self.capture_frame_data(snapshot, pedestrians, frame_data))
 
         # move simulation forward the required number of frames
         # and capture per-frame data
@@ -394,7 +397,7 @@ class BatchGenerator(mp.Process):
 
         return batch_data, clips_count
 
-    def capture_frame_data(self, snapshot: carla.WorldSnapshot, pedestrians: Iterable[Iterable[km.Walker]], out_frame_data: Iterable[Iterable[Iterable[Dict]]]):
+    def capture_frame_data(self, snapshot: carla.WorldSnapshot, pedestrians: Iterable[Iterable[Walker]], out_frame_data: Iterable[Iterable[Iterable[Dict]]]):
         """
         Capture per-frame data.
         """
@@ -437,7 +440,7 @@ class BatchGenerator(mp.Process):
             clip_models: Iterable[str] = models[clip_idx]
             clip_profiles: Iterable[PedestrianProfile] = profiles[clip_idx]
             clip_spawn_points: Iterable[carla.Transform] = spawn_points[clip_idx]
-            clip_pedestrians: Iterable[km.Walker] = pedestrians[clip_idx]
+            clip_pedestrians: Iterable[Walker] = pedestrians[clip_idx]
 
             clip_captured_data: Iterable[Dict] = sorted(
                 captured_data[clip_idx], key=lambda x: x[0]['world.frame'])
