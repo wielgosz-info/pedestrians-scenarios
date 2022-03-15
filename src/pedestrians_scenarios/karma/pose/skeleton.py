@@ -43,7 +43,7 @@ class Skeleton(Enum):
         """
         Helper function to get the edge index of the skeleton in the torch geometric format.
         """
-        if cls._edge_index is not None:
+        if getattr(cls, '_edge_index', None) is not None:
             return cls._edge_index
 
         row = [edge[0].value for edge in cls.get_edges()] + \
@@ -55,7 +55,7 @@ class Skeleton(Enum):
         edge_index, edge_attrs = torch_geometric.utils.from_scipy_sparse_matrix(
             sparse_mtx)
         cls._edge_index = edge_index
-        
+
         return cls._edge_index
 
 
