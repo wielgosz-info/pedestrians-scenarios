@@ -3,7 +3,7 @@ import logging
 import math
 import os
 import warnings
-from typing import List, Dict, Any
+from typing import Iterable, List, Dict, Any
 
 import numpy as np
 import pims
@@ -23,7 +23,7 @@ class SourceVideosRenderer(Renderer):
     def overlay_skeletons(self) -> bool:
         return self.__overlay_skeletons
 
-    def render(self, meta: List[Dict[str, Any]], **kwargs) -> List[np.ndarray]:
+    def render(self, meta: Dict[str, Iterable[Any]], targets: Dict[str, Iterable], **kwargs) -> List[np.ndarray]:
         # TODO: bboxes/skeletons should be in targets, not meta?
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -36,7 +36,7 @@ class SourceVideosRenderer(Renderer):
                 meta['clip_id'][clip_idx],
                 meta['start_frame'][clip_idx],
                 meta['end_frame'][clip_idx],
-                meta['bboxes'][clip_idx] if 'bboxes' in meta else None,
+                targets['bboxes'][clip_idx] if 'bboxes' in targets else None,
                 [{
                     'keypoints': sk['keypoints'][clip_idx],
                     'color': sk['color'],
