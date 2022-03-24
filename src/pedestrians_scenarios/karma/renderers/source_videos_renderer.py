@@ -13,18 +13,18 @@ from .points_renderer import PointsRenderer
 
 
 class SourceVideosRenderer(Renderer):
-    def __init__(self, data_dir: str, overlay_skeletons: bool = False, **kwargs) -> None:
+    def __init__(self, data_dir: str, overlay_skeletons: bool = False, center_bboxes: bool = True, **kwargs) -> None:
         super().__init__(**kwargs)
 
         self.__data_dir = data_dir
         self.__overlay_skeletons = overlay_skeletons
+        self.__center_bboxes = center_bboxes
 
     @property
     def overlay_skeletons(self) -> bool:
         return self.__overlay_skeletons
 
-    def render(self, meta: Dict[str, Iterable[Any]], targets: Dict[str, Iterable], **kwargs) -> List[np.ndarray]:
-        # TODO: bboxes/skeletons should be in targets, not meta?
+    def render(self, meta: List[Dict[str, Any]], bboxes: Iterable[np.ndarray] = None, **kwargs) -> List[np.ndarray]:
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         rendered_videos = len(meta['video_id'])
@@ -36,7 +36,7 @@ class SourceVideosRenderer(Renderer):
                 meta['clip_id'][clip_idx],
                 meta['start_frame'][clip_idx],
                 meta['end_frame'][clip_idx],
-                targets['bboxes'][clip_idx] if 'bboxes' in targets else None,
+                bboxes[clip_idx] if bboxes is not None else None,
                 [{
                     'keypoints': sk['keypoints'][clip_idx],
                     'color': sk['color'],
@@ -59,7 +59,7 @@ class SourceVideosRenderer(Renderer):
                 clip = video[start_frame:end_frame]
                 (clip_height, clip_width, _) = clip.frame_shape
 
-                if bboxes is None:
+                if bboxes is None or not self.__center_bboxes:
                     centers = np.array([(clip_width/2, clip_height/2)] *
                                        (end_frame - start_frame)).round().astype(np.int)
                 elif isinstance(bboxes, np.ndarray):
