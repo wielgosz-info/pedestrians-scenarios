@@ -8,21 +8,34 @@ from typing import Iterable, List, Dict, Any
 import numpy as np
 import pims
 import av
+from PIL import Image, ImageDraw
 from .renderer import Renderer
 from .points_renderer import PointsRenderer
 
 
 class SourceVideosRenderer(Renderer):
-    def __init__(self, data_dir: str, overlay_skeletons: bool = False, center_bboxes: bool = True, **kwargs) -> None:
+    def __init__(
+        self,
+        data_dir: str,
+        overlay_skeletons: bool = False,
+        center_bboxes: bool = True,
+        overlay_bboxes=False,
+        **kwargs
+    ) -> None:
         super().__init__(**kwargs)
 
         self.__data_dir = data_dir
         self.__overlay_skeletons = overlay_skeletons
+        self.__overlay_bboxes = overlay_bboxes
         self.__center_bboxes = center_bboxes
 
     @property
     def overlay_skeletons(self) -> bool:
         return self.__overlay_skeletons
+
+    @property
+    def overlay_bboxes(self) -> bool:
+        return self.__overlay_bboxes
 
     def render(self, meta: List[Dict[str, Any]], bboxes: Iterable[np.ndarray] = None, **kwargs) -> List[np.ndarray]:
         warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -77,7 +90,9 @@ class SourceVideosRenderer(Renderer):
                                           'keypoints': np.array(sk['keypoints'][idx], np.int32),
                                           'color': sk['color'],
                                           'type': sk['type']
-                                      } for sk in skeletons] if skeletons is not None and self.__overlay_skeletons else None)
+                                      } for sk in skeletons] if skeletons is not None and self.__overlay_skeletons else None,
+                                      bbox=bboxes[idx] if bboxes is not None and self.__overlay_bboxes else None
+                                      )
         except AssertionError:
             # no video or multiple candidates - skip
             logging.getLogger(__name__).warn(
@@ -86,7 +101,7 @@ class SourceVideosRenderer(Renderer):
         return canvas
 
     @staticmethod
-    def render_frame(canvas, clip, frame_half_size, bbox_center, clip_size, skeletons=None):
+    def render_frame(canvas, clip, frame_half_size, bbox_center, clip_size, skeletons=None, bbox=None):
         (half_width, half_height) = frame_half_size
         (x_center, y_center) = bbox_center
         (clip_width, clip_height) = clip_size
@@ -107,7 +122,23 @@ class SourceVideosRenderer(Renderer):
                 SourceVideosRenderer.overlay_skeleton(
                     canvas, skeleton, (canvas_x_shift-frame_x_min, canvas_y_shift-frame_y_min))
 
+        if bbox is not None:
+            SourceVideosRenderer.overlay_bbox(canvas, bbox, (canvas_x_shift-frame_x_min, canvas_y_shift-frame_y_min))
+
         return canvas
+
+    @staticmethod
+    def overlay_bbox(canvas, bbox, shift=(0, 0)):
+        ((x_min, y_min), (x_max, y_max)) = bbox
+        (x_min, y_min, x_max, y_max) = (x_min+shift[0], y_min+shift[1], x_max+shift[0], y_max+shift[1])
+
+        end = canvas.shape[-1]
+        has_alpha = end == 4
+        img = Image.fromarray(canvas, 'RGBA' if has_alpha else 'RGB')
+        draw = ImageDraw.Draw(img, 'RGBA' if has_alpha else 'RGB')
+        draw.rectangle((x_min, y_min, x_max, y_max), outline=(0, 0, 255, 255)[:end])
+
+        canvas[:] = np.array(img)
 
     @staticmethod
     def overlay_skeleton(canvas, skeleton, shift=(0, 0)):
