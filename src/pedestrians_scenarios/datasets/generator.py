@@ -1,4 +1,5 @@
 import ast
+from email import header
 import logging
 import os
 import time
@@ -32,6 +33,7 @@ PedestrianProfile = namedtuple(
         'walking_speed', 'crossing_speed'
     ])
 
+
 # Create some default profiles; those are up for revision
 # somewhat based on what's found in doi:10.1016/j.sbspro.2013.11.160
 
@@ -53,14 +55,16 @@ class BatchGenerator(mp.Process):
     """
 
     def __init__(self,
-                 outfile: str,
-                 outfile_lock: mp.Lock,
-                 outputs_dir: str,
-                 queue: mp.Queue,
-                 seed: int = 22752,
-                 batch_idx: int = 0,
-                 batch_size: int = 16,
+                 outfile: str, # csv output file
+                 outfile_lock: mp.Lock, # so the one process writes to the same file (it is shared among all processes)
+                 outputs_dir: str, # directory where the output video files will be stored
+                 queue: mp.Queue, # queue to communicate with the main process (to know when the batch is done and how many clips were generated)
+                 seed: int = 22752, # each process will use a different seed
+                 batch_idx: int = 0, # index of the batch
+                 batch_size: int = 16, # how many videos to generate in a single world at the same time (the world is not reset between clips and the created only at the beginning of the batch)
                  clip_length_in_frames: int = 600,
+                 # there is problem with kids in real datasets, there are only few of them,
+                 # in our case have equal number of adults and children which is less realistic but more useful
                  pedestrian_distributions: Iterable[Tuple[PedestrianProfile, float]] = (
                      (ExamplePedestrianProfiles.adult_female.value, 0.25),
                      (ExamplePedestrianProfiles.adult_male.value, 0.25),
@@ -109,10 +113,18 @@ class BatchGenerator(mp.Process):
             karma.reset_world(map_name)
 
             batch_data, no_of_generated_clips = self.generate_batch(map_name)
-            with self._outfile_lock:
-                pd.DataFrame(batch_data).to_csv(self._outfile, mode='a',
-                                                header=(self._batch_idx == 0),
-                                                index=False)
+            if no_of_generated_clips > 0:
+                with self._outfile_lock:
+                    header = False
+                    if not os.path.exists(self._outfile):
+                        header = True
+                    else:
+                        df = pd.read_csv(self._outfile, nrows=1)
+                        header = len(df) == 0
+
+                    pd.DataFrame(batch_data).to_csv(self._outfile, mode='a',
+                                                    header=header,
+                                                    index=False)  
 
         logging.getLogger(__name__).debug(
             f'Generated {no_of_generated_clips} clips.')
@@ -148,6 +160,7 @@ class BatchGenerator(mp.Process):
     def get_models(self, profiles: Iterable[Iterable[PedestrianProfile]]) -> Iterable[Iterable[str]]:
         """
         Get the models (blueprint names) for each pedestrian.
+        In addition to sex and age we need blueprint (appearance+) of pedestrian.
 
         :param profiles: List of pedestrian profiles that will be used.
         :type profiles: Iterable[Iterable[PedestrianProfile]]
@@ -312,7 +325,7 @@ class BatchGenerator(mp.Process):
         """
         Generate a single batch.
         """
-        profiles = self.get_profiles()
+        profiles = self.get_profiles() 
         spawn_points = self.get_spawn_points(profiles)
         models = self.get_models(profiles)
         pedestrians = self.get_pedestrians(models, spawn_points)
@@ -335,7 +348,7 @@ class BatchGenerator(mp.Process):
 
         self.setup_pedestrians(pedestrians, profiles, camera_look_at)
 
-        # apply settings to pedestrians
+        # apply settings to pedestrians by ticking the world
         self._karma.tick()
 
         controllers = self.get_pedestrians_control(
@@ -558,7 +571,12 @@ class Generator(object):
                  ) -> None:
         self._outputs_dir = outputs_dir
         # Ensure that the output directory exists AND is empty
+        if os.path.exists(self._outputs_dir):
+            if os.listdir(self._outputs_dir):
+                raise ValueError(
+                    f'Output directory {self._outputs_dir} is not empty.')
         os.makedirs(self._outputs_dir, exist_ok=False)
+        
 
         # handle complex config data
         self._camera_distances_distributions = self.__parse_camera_position_distributions(
@@ -643,14 +661,14 @@ class Generator(object):
         outfile_lock = mp.Lock()
         results_queue = mp.Queue()
 
-        generated_clips = []
+        generated_clips_count = []
         batch_idx = 0
         failed = 0
         server_failed = 0
 
         with tqdm(total=self._number_of_clips, desc='Clips', position=0, postfix={'failed': 0}) as pbar:
-            while sum(generated_clips) < self._number_of_clips and batch_idx < 2*self._total_batches:
-                failed = batch_idx - sum(generated_clips)
+            while sum(generated_clips_count) < self._number_of_clips and batch_idx < 2*self._total_batches:
+                failed = batch_idx * self._batch_size - sum(generated_clips_count)
                 pbar.set_postfix(failed=failed)
 
                 # TODO: this has the potential for a 'real' multiprocessing if multiple servers are available
@@ -685,10 +703,10 @@ class Generator(object):
                     time.sleep(float(os.getenv('CARLA_SERVER_START_PERIOD', '30.0')))
                     continue
 
-                generated_clips.append(results_queue.get())
+                generated_clips_count.append(results_queue.get()) # append number of clips generated in this batch
 
-                if generated_clips[-1] > 0:
-                    pbar.update(generated_clips[-1])
+                if generated_clips_count[-1] > 0:
+                    pbar.update(generated_clips_count[-1])
 
         logging.getLogger(__name__).info(
-            f'Generated {sum(generated_clips)} clips out of desired {self._number_of_clips}. Batch generation failed {failed} times, including {server_failed} server failures/timeouts.')
+            f'Generated {sum(generated_clips_count)} clips out of desired {self._number_of_clips}. Batch generation failed {failed} times, including {server_failed} server failures/timeouts.')

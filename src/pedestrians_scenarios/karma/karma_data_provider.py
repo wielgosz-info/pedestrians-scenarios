@@ -66,7 +66,7 @@ class KarmaDataProvider(CarlaDataProvider):
         shift = KarmaDataProvider.get_rng().randn()
         shifted_waypoint = random_waypoint
         try:
-            if shift > 0.02:
+            if shift > 0.02: # if the distances are too small, the shifted waypoint will be the same as the original (2 cm)
                 shifted_waypoint = random_waypoint.next(shift)[0]
             elif shift < -0.02:
                 shifted_waypoint = random_waypoint.previous(-shift)[0]

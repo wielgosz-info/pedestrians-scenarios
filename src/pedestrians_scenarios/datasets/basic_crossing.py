@@ -62,6 +62,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
             direction_unit = direction_unit.make_unit_vector()
 
             # shortcut, since we're ignoring elevation
+            # compute how we need to rotate the pedestrian to face the waypoint
             pedestrian_transform = deepcopy_transform(pedestrian.get_transform())
             delta = np.rad2deg(np.arctan2(direction_unit.y, direction_unit.x))
             pedestrian_transform.rotation.yaw = pedestrian_transform.rotation.yaw + delta
