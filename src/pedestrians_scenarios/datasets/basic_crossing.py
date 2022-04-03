@@ -31,7 +31,8 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
         """
         waypoints: List[carla.Waypoint] = [
             KarmaDataProvider.get_shifted_driving_lane_waypoint(
-                pedestrian.get_transform().location)
+                pedestrian.get_transform().location,
+                waypoint_jitter_scale=self._waypoint_jitter_scale)
             for pedestrian in pedestrians
         ]
 
@@ -83,7 +84,8 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
                 waypoint
             ])
             controllers.append(controller)
-        return controllers
+        return controllers 
+    
 
 
 class BasicSinglePedestrianCrossing(Generator):

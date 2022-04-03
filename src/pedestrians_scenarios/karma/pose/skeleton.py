@@ -39,7 +39,7 @@ class Skeleton(Enum):
         raise NotImplementedError()
 
     @classmethod
-    def get_edge_index(cls) -> torch.Tensor:
+    def get_edge_index(cls) -> 'torch.Tensor':
         """
         Helper function to get the edge index of the skeleton in the torch geometric format.
         """

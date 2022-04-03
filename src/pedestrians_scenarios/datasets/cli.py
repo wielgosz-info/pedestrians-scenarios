@@ -24,6 +24,6 @@ def add_datasets_cli_args(command_subparsers, add_common_subcommand_args):
     # 'generate' subcommand
     parser_generate = subparsers.add_parser("generate")
     parser_generate = add_common_subcommand_args(parser_generate)
-    parser_generate = km.Karma.add_cli_args(parser_generate)
+    parser_generate = km.karma.Karma.add_cli_args(parser_generate)
     parser_generate = BasicSinglePedestrianCrossing.add_cli_args(parser_generate)
     parser_generate.set_defaults(subcommand=datasets_generate_command)

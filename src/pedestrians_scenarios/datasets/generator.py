@@ -78,6 +78,7 @@ class BatchGenerator(mp.Process):
                  ),),
                  camera_fov: float = 90.0,
                  camera_image_size: Tuple[int, int] = (800, 600),
+                 waypoint_jitter_scale: float = 1.0,
                  **kwargs) -> None:
         super().__init__(
             group=kwargs.get('group', None),
@@ -101,6 +102,7 @@ class BatchGenerator(mp.Process):
         self._clip_length_in_frames = clip_length_in_frames
         self._camera_fov = camera_fov
         self._camera_image_size = camera_image_size
+        self._waypoint_jitter_scale = waypoint_jitter_scale
 
         self._karma = None
         self._kwargs = kwargs
@@ -540,7 +542,7 @@ class BatchGenerator(mp.Process):
                             batch_data.append(full_frame_data)
             if not skipped:
                 clips_count += 1
-        return batch_data, clips_count
+        return batch_data, clips_count # batch_data has been flattened to a list of dicts
 
 
 class Generator(object):
@@ -649,6 +651,8 @@ class Generator(object):
                                help='Camera horizontal FOV in degrees.')
         subparser.add_argument('--camera-image-size', type=ast.literal_eval, default='(800,600)',
                                help='Camera image size in pixels as a (width, height) tuple (default: (800,600)).')
+        subparser.add_argument('--waypoint-jitter-scale', type=float, default=1.0, help='Scale of jitter applied to waypoints.')
+        
 
         return parser
 
