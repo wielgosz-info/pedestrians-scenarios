@@ -434,6 +434,7 @@ class BatchGenerator(mp.Process):
                     'frame.pedestrian.pose.world': convert_pose_dict_to_list(world_pose),
                     'frame.pedestrian.pose.component': convert_pose_dict_to_list(component_pose),
                     'frame.pedestrian.pose.relative': convert_pose_dict_to_list(relative_pose),
+                    'frame.pedestrian.is_crossing': pedestrian.is_crossing,
                 })
 
             clip_data.append(current_frame_data)

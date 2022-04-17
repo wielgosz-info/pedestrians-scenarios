@@ -21,6 +21,10 @@ class BasicPedestrianControl(PedestrianControl):
         # it is probably stuck somewhere, and therefore useless
         self._reached_first_waypoint = False
 
+        self.roadWaypointPos = None
+        self.reachedWaypoints = 0
+        self.actor = actor
+
     def run_step(self, *args, **kwargs):
         old_waypoints = self._waypoints
 
@@ -29,8 +33,46 @@ class BasicPedestrianControl(PedestrianControl):
         if len(old_waypoints) != len(self._waypoints):
             self._reached_first_waypoint = True
 
+            if self.roadWaypointPos is not None:
+
+                if self.roadWaypointPos == 0: # Pedestrian starts crossing when spawned
+                    
+                    self.actor.is_crossing = 1
+
+                elif self.roadWaypointPos == -1: # Pedestrian will never cross
+
+                    self.actor.is_crossing = 0
+
+                else: # Pedestrian is crossing or will cross in the future
+
+                    if self.reachedWaypoints >= (self.roadWaypointPos - 1): # Pedestrian reached road (is crossing)
+
+                        self.actor.is_crossing = 1
+
+                    else: # Pedestrian is not crossing
+                        
+                        self.actor.is_crossing = 0
+
+            self.reachedWaypoints = self.reachedWaypoints + 1
+
         return out
 
     @property
     def reached_first_waypoint(self):
         return self._reached_first_waypoint
+
+
+    def reached_last_waypoint(self):
+        return len(self._waypoints) == 0
+
+    
+    def setLaneWaypoint(self, waypointPos):
+        self.roadWaypointPos = waypointPos
+
+        if waypointPos == 0: # Pedestrian starts crossing when spawned
+
+            self.actor.is_crossing = 1
+
+        elif waypointPos == -1: # Pedestrian will never cross
+
+            self.actor.is_crossing = 0
