@@ -77,7 +77,7 @@ The command above will run in a dry mode (the files will not be removed). If you
 
 `python utils/sync_csv_and_videos.py --csv_path /outputs/jitter-10/data.csv --video_path /outputs/jitter-10/clips --remove`
 
-Keep in mind that the video files which do not contain pedestrians in the folders you provide as the arguments will removed. The csv file will also be changed by removing rows which refer to videos which do not contain pedestrians.
+Keep in mind that the video files which do not contain pedestrians in the folders you provide as the arguments will be removed. The csv file will also be changed by removing rows which refer to videos which do not contain pedestrians.
 
 
 ## Funding
