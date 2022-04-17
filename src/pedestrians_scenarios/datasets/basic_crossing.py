@@ -9,6 +9,7 @@ from pedestrians_scenarios.datasets.generator import Generator, BatchGenerator, 
 from pedestrians_scenarios.karma.walker import Walker
 import carla
 
+import random
 
 class BasicSinglePedestrianCrossingBatch(BatchGenerator):
     """
@@ -80,11 +81,105 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
             controller = BasicPedestrianControl(pedestrian)
             controller.update_target_speed(self._rng.normal(
                 profile.crossing_speed.mean, profile.crossing_speed.std))
-            controller.update_waypoints([
-                waypoint
-            ])
+            
+            pathInfo = self.generatePath(pedestrian, waypoint)
+            controller.update_waypoints(pathInfo[0])
+            controller.setLaneWaypoint(pathInfo[1])
+
             controllers.append(controller)
-        return controllers 
+
+        return controllers
+
+
+    def Distance(self, pos1, pos2):
+
+        pos1_np = np.asarray([pos1.x, pos1.y, pos1.z])
+        pos2_np = np.asarray([pos2.x, pos2.y, pos2.z])
+
+        dist = np.power(pos2_np - pos1_np, 2)
+
+        dist = np.sum(dist)
+
+        dist = np.sqrt(dist)
+
+        return dist
+
+    def getRoadParallelPath(self, pedestrian, waypoint):
+
+        try:
+
+            roadpos1 = waypoint
+            roadpos2 = KarmaDataProvider.get_closest_driving_lane_waypoint(waypoint.location).next(2)[0].transform
+
+            vectorRoad = roadpos2.location - roadpos1.location
+
+            pedestrianLocation = pedestrian.get_transform().location
+
+            distPos1 = self.Distance(roadpos1.location, pedestrianLocation)
+            distPos2 = self.Distance(roadpos2.location, pedestrianLocation)
+
+            if distPos1 > distPos2:
+
+                dir = vectorRoad * -1
+
+            else:
+
+                dir = vectorRoad
+
+            parallelWaypoint = carla.Transform(location=(pedestrianLocation + dir * 5 * random.random()), rotation=carla.Rotation())
+
+            return [parallelWaypoint, roadpos2]
+
+
+        except IndexError:
+
+            print('IndexError in getRoadParallelPath')
+
+            return [pedestrian.clip_spawn_points[0], waypoint]
+    
+
+    def generatePath(self, pedestrian, waypoint):
+
+        pr = random.random()
+
+        if pr < 0.2:
+            # Case 0: Pedestrian directly wants to cross the street:
+            path = [waypoint]
+            laneWaypointPos = 0
+
+        elif pr >= 0.2 and pr < 0.25:
+            # Case 1: Pedestrian starts crossing the street and then regrets and goes back again:
+            path = [waypoint, pedestrian.spawn_point]
+            laneWaypointPos = 0
+
+        elif pr >= 0.25 and pr < 0.75:
+            # Case 2: Pedestrian walks to a point in the path and then decides crossing the street:
+
+            pedNextPos, roadpos2 = self.getRoadParallelPath(pedestrian, waypoint)
+            nextWaypoint = roadpos2 if random.random() < 0.75 else waypoint
+
+            path = [pedNextPos, nextWaypoint]
+            laneWaypointPos = 1
+
+        elif pr >= 0.75 and pr < 0.8:
+            # Case 3: Pedestrian walks to a point in the path, then decides crossing the street, and finally regrets and goes back:
+
+            pedNextPos, roadpos2 = self.getRoadParallelPath(pedestrian, waypoint)
+            nextWaypoint = roadpos2 if random.random() < 0.75 else waypoint
+
+            path = [pedNextPos, nextWaypoint, pedNextPos]
+            laneWaypointPos = 1
+
+        elif pr >= 0.8:
+            # Case 4: Pedestrian walks to a point in the path and never decides to cross the street:
+
+            pedNextPos, roadpos2 = self.getRoadParallelPath(pedestrian, waypoint)
+            nextWaypoint = roadpos2 if random.random() < 0.75 else waypoint
+            
+            path = [pedNextPos]
+            laneWaypointPos = -1
+
+        return [path, laneWaypointPos]
     
 
 
