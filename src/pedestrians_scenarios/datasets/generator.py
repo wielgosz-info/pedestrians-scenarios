@@ -126,7 +126,9 @@ class BatchGenerator(mp.Process):
 
                     pd.DataFrame(batch_data).to_csv(self._outfile, mode='a',
                                                     header=header,
-                                                    index=False)  
+                                                    index=False)
+                                                    
+            self._karma = None
 
         logging.getLogger(__name__).debug(
             f'Generated {no_of_generated_clips} clips.')

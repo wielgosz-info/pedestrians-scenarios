@@ -67,6 +67,19 @@ ssh -v -N forward_carlaviz
 
 **Important note: if you need to restart the carlaviz container, kill the forwarding first, then restart carlaviz and wait for it to be running, and only then start forwarding again. Otherwise you will get stuck with "Launch the backend and refresh" message in the browser.**
 
+
+## Dataset cleaning
+There are quite many videos which do not contain pedestrians. It is possible to clean the folder with data using the cleaning script with the following command (this is a usage example):
+
+`python utils/sync_csv_and_videos.py --csv_path /outputs/jitter-10/data.csv --video_path /outputs/jitter-10/clips`
+
+The command above will run in a dry mode (the files will not be removed). If you actually want to remove them run this command (this is a usage example):
+
+`python utils/sync_csv_and_videos.py --csv_path /outputs/jitter-10/data.csv --video_path /outputs/jitter-10/clips --remove`
+
+Keep in mind that the video files which do not contain pedestrians in the folders you provide as the arguments will removed. The csv file will also be changed by removing rows which refer to videos which do not contain pedestrians.
+
+
 ## Funding
 
 |                                                                                                                              |                                                                                                                      |                                                                                                                                                                                                                                                                                                                                                                                      |

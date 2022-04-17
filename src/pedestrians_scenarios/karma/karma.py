@@ -225,9 +225,9 @@ class Karma(object):
         """
         Unregisters a callback previously registered with register_callback.
         """
-        for event_type in self.__registered_callbacks:
-            if callback_id in self.__registered_callbacks[event_type]:
-                del self.__registered_callbacks[event_type][callback_id]
+        for stage_type in self.__registered_callbacks:
+            if callback_id in self.__registered_callbacks[stage_type]:
+                del self.__registered_callbacks[stage_type][callback_id]
                 return
 
     def register_controller(self, controller: BasicControl) -> None:

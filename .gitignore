@@ -52,3 +52,6 @@ MANIFEST
 .venv*/
 .conda*/
 .env
+
+#checkpoints
+*.weights
