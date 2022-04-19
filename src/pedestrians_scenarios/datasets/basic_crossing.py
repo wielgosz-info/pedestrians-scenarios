@@ -9,7 +9,6 @@ from pedestrians_scenarios.datasets.generator import Generator, BatchGenerator, 
 from pedestrians_scenarios.karma.walker import Walker
 import carla
 
-import random
 
 class BasicSinglePedestrianCrossingBatch(BatchGenerator):
     """
@@ -126,7 +125,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
 
                 dir = vectorRoad
 
-            parallelWaypoint = carla.Transform(location=(pedestrianLocation + dir * 5 * random.random()), rotation=carla.Rotation())
+            parallelWaypoint = carla.Transform(location=(pedestrianLocation + dir * 5 * KarmaDataProvider.get_rng().randn()), rotation=carla.Rotation())
 
             return [parallelWaypoint, roadpos2]
 
@@ -140,7 +139,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
 
     def generatePath(self, pedestrian, waypoint):
 
-        pr = random.random()
+        pr = KarmaDataProvider.get_rng().randn()
 
         if pr < 0.2:
             # Case 0: Pedestrian directly wants to cross the street:
@@ -156,7 +155,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
             # Case 2: Pedestrian walks to a point in the path and then decides crossing the street:
 
             pedNextPos, roadpos2 = self.getRoadParallelPath(pedestrian, waypoint)
-            nextWaypoint = roadpos2 if random.random() < 0.75 else waypoint
+            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().randn() < 0.75 else waypoint
 
             path = [pedNextPos, nextWaypoint]
             laneWaypointPos = 1
@@ -165,7 +164,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
             # Case 3: Pedestrian walks to a point in the path, then decides crossing the street, and finally regrets and goes back:
 
             pedNextPos, roadpos2 = self.getRoadParallelPath(pedestrian, waypoint)
-            nextWaypoint = roadpos2 if random.random() < 0.75 else waypoint
+            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().randn() < 0.75 else waypoint
 
             path = [pedNextPos, nextWaypoint, pedNextPos]
             laneWaypointPos = 1
@@ -174,7 +173,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
             # Case 4: Pedestrian walks to a point in the path and never decides to cross the street:
 
             pedNextPos, roadpos2 = self.getRoadParallelPath(pedestrian, waypoint)
-            nextWaypoint = roadpos2 if random.random() < 0.75 else waypoint
+            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().randn() < 0.75 else waypoint
             
             path = [pedNextPos]
             laneWaypointPos = -1
