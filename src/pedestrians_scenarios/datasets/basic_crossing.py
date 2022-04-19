@@ -81,9 +81,9 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
             controller.update_target_speed(self._rng.normal(
                 profile.crossing_speed.mean, profile.crossing_speed.std))
             
-            pathInfo = self.generatePath(pedestrian, waypoint)
-            controller.update_waypoints(pathInfo[0])
-            controller.setLaneWaypoint(pathInfo[1])
+            waypoints_path, lane_waypoint_idx = self.generatePath(pedestrian, waypoint)
+            controller.update_waypoints(waypoints_path)
+            controller.setLaneWaypoint(lane_waypoint_idx)
 
             controllers.append(controller)
 
