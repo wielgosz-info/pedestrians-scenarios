@@ -128,7 +128,12 @@ class KarmaDataProvider(CarlaDataProvider):
     @staticmethod
     def load_spawnpoints_blacklist():
     
-        blacklist_str = pd.read_csv('spawnpoints_blacklist.csv')['0'].tolist()
+        try:
+            map_name = CarlaDataProvider._map.name.split("/")[-1]
+            blacklist_str = pd.read_csv('spawnpoints_blacklist/' + map_name + '.csv')['0'].tolist()
+        except:
+            logging.getLogger(__name__).debug('Cannot find spawnpoints blacklist for current map.')
+            return []
     
         spawnpoints_blacklist = []
         
