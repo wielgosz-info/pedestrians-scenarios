@@ -125,23 +125,8 @@ class KarmaDataProvider(CarlaDataProvider):
         # Initialize pedestrian spawn points
         KarmaDataProvider.generate_pedestrian_spawn_points()
 
-    
     @staticmethod
-    def Distance(pos1, pos2):
-
-        pos1_np = np.asarray([pos1.x, pos1.y, pos1.z])
-        pos2_np = np.asarray([pos2.x, pos2.y, pos2.z])
-
-        dist = np.power(pos2_np - pos1_np, 2)
-
-        dist = np.sum(dist)
-
-        dist = np.sqrt(dist)
-
-        return dist
-
-    @staticmethod
-    def loadSpawnPointsBlacklist():
+    def load_spawnpoints_blacklist():
     
         blacklist_str = pd.read_csv('spawnpoints_blacklist.csv')['0'].tolist()
     
@@ -165,25 +150,25 @@ class KarmaDataProvider(CarlaDataProvider):
         return spawnpoints_blacklist
     
     @staticmethod
-    def filterPedestrianSpawnPoints(pedestrian_spawn_points):
+    def filter_pedestrian_spawnpoints(pedestrian_spawn_points):
 
-        spawnpoints_blacklist = KarmaDataProvider.loadSpawnPointsBlacklist()
+        spawnpoints_blacklist = KarmaDataProvider.load_spawnpoints_blacklist()
         
         filtered_spawn_points = []
         
-        for spawnPoint in pedestrian_spawn_points:
+        for ped_spawnpoint in pedestrian_spawn_points:
             
             addSpawnpoint = True
             
-            for blacklistedSpawnpoint in spawnpoints_blacklist:
-                dist = KarmaDataProvider.Distance(spawnPoint.location, blacklistedSpawnpoint.location)
+            for blacklisted_spawnpoint in spawnpoints_blacklist:
+                dist = ped_spawnpoint.location.distance(blacklisted_spawnpoint.location)
                                 
                 if dist < 15:
                     addSpawnpoint = False
                     break
                     
             if addSpawnpoint:
-                filtered_spawn_points.append(spawnPoint)
+                filtered_spawn_points.append(ped_spawnpoint)
         
         return filtered_spawn_points
 
@@ -195,7 +180,9 @@ class KarmaDataProvider(CarlaDataProvider):
             ).get_random_location_from_navigation())
             for _ in range(len(KarmaDataProvider._spawn_points))
         ]        
-        pedestrian_spawn_points = KarmaDataProvider.filterPedestrianSpawnPoints(pedestrian_spawn_points)
+        pedestrian_spawn_points = KarmaDataProvider.filter_pedestrian_spawnpoints(pedestrian_spawn_points)
+        if len(pedestrian_spawn_points) == 0:
+            raise RuntimeError('All pedestrian spawnpoints have been filtered and pedestrian spawnpoints list is now empty.')
         KarmaDataProvider.get_rng().shuffle(pedestrian_spawn_points)
         KarmaDataProvider._pedestrian_spawn_points = pedestrian_spawn_points
         KarmaDataProvider._pedestrian_spawn_index = 0
