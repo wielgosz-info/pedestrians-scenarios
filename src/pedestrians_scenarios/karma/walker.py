@@ -12,6 +12,7 @@ class Walker(Actor):
             kwargs['random_location'] = False
 
         super().__init__(**kwargs)
+        self.is_crossing = 0
 
     @staticmethod
     def get_model_by_age_and_gender(age, gender) -> str:
