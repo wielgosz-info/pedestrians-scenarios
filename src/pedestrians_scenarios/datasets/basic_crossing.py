@@ -81,29 +81,15 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
             controller.update_target_speed(self._rng.normal(
                 profile.crossing_speed.mean, profile.crossing_speed.std))
             
-            waypoints_path, lane_waypoint_idx = self.generatePath(pedestrian, waypoint)
+            waypoints_path, lane_waypoint_idx = self.generate_path(pedestrian, waypoint)
             controller.update_waypoints(waypoints_path)
-            controller.setLaneWaypoint(lane_waypoint_idx)
+            controller.set_lane_waypoint(lane_waypoint_idx)
 
             controllers.append(controller)
 
         return controllers
 
-
-    def Distance(self, pos1, pos2):
-
-        pos1_np = np.asarray([pos1.x, pos1.y, pos1.z])
-        pos2_np = np.asarray([pos2.x, pos2.y, pos2.z])
-
-        dist = np.power(pos2_np - pos1_np, 2)
-
-        dist = np.sum(dist)
-
-        dist = np.sqrt(dist)
-
-        return dist
-
-    def getRoadParallelPath(self, pedestrian, waypoint):
+    def get_road_parallel_path(self, pedestrian, waypoint):
 
         try:
 
@@ -112,10 +98,10 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
 
             vectorRoad = roadpos2.location - roadpos1.location
 
-            pedestrianLocation = pedestrian.get_transform().location
+            pedestrian_location = pedestrian.get_transform().location
 
-            distPos1 = self.Distance(roadpos1.location, pedestrianLocation)
-            distPos2 = self.Distance(roadpos2.location, pedestrianLocation)
+            distPos1 = roadpos1.location.distance(pedestrian_location)
+            distPos2 = roadpos2.location.distance(pedestrian_location)
 
             if distPos1 > distPos2:
 
@@ -125,19 +111,17 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
 
                 dir = vectorRoad
 
-            parallelWaypoint = carla.Transform(location=(pedestrianLocation + dir * 5 * KarmaDataProvider.get_rng().randn()), rotation=carla.Rotation())
+            parallelWaypoint = carla.Transform(location=(pedestrian_location + dir * 5 * KarmaDataProvider.get_rng().randn()), rotation=carla.Rotation())
 
             return [parallelWaypoint, roadpos2]
 
 
         except IndexError:
 
-            print('IndexError in getRoadParallelPath')
-
             return [pedestrian.clip_spawn_points[0], waypoint]
     
 
-    def generatePath(self, pedestrian, waypoint):
+    def generate_path(self, pedestrian, waypoint):
 
         pr = KarmaDataProvider.get_rng().randn()
 
@@ -153,8 +137,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
 
         elif pr >= 0.25 and pr < 0.75:
             # Case 2: Pedestrian walks to a point in the path and then decides crossing the street:
-
-            pedNextPos, roadpos2 = self.getRoadParallelPath(pedestrian, waypoint)
+            pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
             nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().randn() < 0.75 else waypoint
 
             path = [pedNextPos, nextWaypoint]
@@ -162,8 +145,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
 
         elif pr >= 0.75 and pr < 0.8:
             # Case 3: Pedestrian walks to a point in the path, then decides crossing the street, and finally regrets and goes back:
-
-            pedNextPos, roadpos2 = self.getRoadParallelPath(pedestrian, waypoint)
+            pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
             nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().randn() < 0.75 else waypoint
 
             path = [pedNextPos, nextWaypoint, pedNextPos]
@@ -171,8 +153,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
 
         elif pr >= 0.8:
             # Case 4: Pedestrian walks to a point in the path and never decides to cross the street:
-
-            pedNextPos, roadpos2 = self.getRoadParallelPath(pedestrian, waypoint)
+            pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
             nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().randn() < 0.75 else waypoint
             
             path = [pedNextPos]
