@@ -6,6 +6,7 @@ from typing import List
 import carla
 import numpy
 from pedestrians_scenarios.karma.utils.deepcopy import deepcopy_location, deepcopy_transform
+from pedestrians_scenarios.karma.utils.conversions import convert_list_to_transform
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 
 import pandas as pd
@@ -130,27 +131,12 @@ class KarmaDataProvider(CarlaDataProvider):
     
         try:
             map_name = CarlaDataProvider._map.name.split("/")[-1]
-            blacklist_str = pd.read_csv('spawnpoints_blacklist/' + map_name + '.csv')['0'].tolist()
+            blacklist_str = pd.read_csv('spawnpoints_blacklist/' + map_name + '.csv')['0']
         except:
             logging.getLogger(__name__).debug('Cannot find spawnpoints blacklist for current map.')
             return []
     
-        spawnpoints_blacklist = []
-        
-        for p in blacklist_str:
-            p = p.split(', ')
-            
-            x = float(p[0][1:])
-            y = float(p[1])
-            z = float(p[2])
-            loc = carla.Location(x,y,z)
-            
-            pitch = float(p[3])
-            yaw = float(p[4])
-            roll = float(p[5][0:-1])
-            rot = carla.Rotation(pitch,yaw,roll)
-            
-            spawnpoints_blacklist.append(carla.Transform(loc, rot))
+        spawnpoints_blacklist = blacklist_str.apply(lambda x: convert_list_to_transform(list(map(float, x[1:-1].split(', ')))))
             
         return spawnpoints_blacklist
     
