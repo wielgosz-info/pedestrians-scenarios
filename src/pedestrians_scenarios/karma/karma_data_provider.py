@@ -6,8 +6,11 @@ from typing import List
 import carla
 import numpy
 from pedestrians_scenarios.karma.utils.deepcopy import deepcopy_location, deepcopy_transform
+from pedestrians_scenarios.karma.utils.conversions import convert_list_to_transform
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 
+import pandas as pd
+import numpy as np
 
 class KarmaDataProvider(CarlaDataProvider):
     """
@@ -124,13 +127,53 @@ class KarmaDataProvider(CarlaDataProvider):
         KarmaDataProvider.generate_pedestrian_spawn_points()
 
     @staticmethod
+    def load_spawnpoints_blacklist():
+    
+        try:
+            map_name = CarlaDataProvider._map.name.split("/")[-1]
+            blacklist_str = pd.read_csv('spawnpoints_blacklist/' + map_name + '.csv')['0']
+        except:
+            logging.getLogger(__name__).debug('Cannot find spawnpoints blacklist for current map.')
+            return []
+    
+        spawnpoints_blacklist = blacklist_str.apply(lambda x: convert_list_to_transform(list(map(float, x[1:-1].split(', ')))))
+            
+        return spawnpoints_blacklist
+    
+    @staticmethod
+    def filter_pedestrian_spawnpoints(pedestrian_spawn_points):
+
+        spawnpoints_blacklist = KarmaDataProvider.load_spawnpoints_blacklist()
+        
+        filtered_spawn_points = []
+        
+        for ped_spawnpoint in pedestrian_spawn_points:
+            
+            addSpawnpoint = True
+            
+            for blacklisted_spawnpoint in spawnpoints_blacklist:
+                dist = ped_spawnpoint.location.distance(blacklisted_spawnpoint.location)
+                                
+                if dist < 15:
+                    addSpawnpoint = False
+                    break
+                    
+            if addSpawnpoint:
+                filtered_spawn_points.append(ped_spawnpoint)
+        
+        return filtered_spawn_points
+
+    @staticmethod
     def generate_pedestrian_spawn_points():
         # for simplicity sake, we generate the same number of spawn points for pedestrians as for vehicles
         pedestrian_spawn_points = [
             carla.Transform(KarmaDataProvider.get_world(
             ).get_random_location_from_navigation())
             for _ in range(len(KarmaDataProvider._spawn_points))
-        ]
+        ]        
+        pedestrian_spawn_points = KarmaDataProvider.filter_pedestrian_spawnpoints(pedestrian_spawn_points)
+        if len(pedestrian_spawn_points) == 0:
+            raise RuntimeError('All pedestrian spawnpoints have been filtered and pedestrian spawnpoints list is now empty.')
         KarmaDataProvider.get_rng().shuffle(pedestrian_spawn_points)
         KarmaDataProvider._pedestrian_spawn_points = pedestrian_spawn_points
         KarmaDataProvider._pedestrian_spawn_index = 0

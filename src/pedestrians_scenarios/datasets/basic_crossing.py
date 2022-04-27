@@ -80,11 +80,86 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
             controller = BasicPedestrianControl(pedestrian)
             controller.update_target_speed(self._rng.normal(
                 profile.crossing_speed.mean, profile.crossing_speed.std))
-            controller.update_waypoints([
-                waypoint
-            ])
+            
+            waypoints_path, lane_waypoint_idx = self.generate_path(pedestrian, waypoint)
+            controller.update_waypoints(waypoints_path)
+            controller.set_lane_waypoint(lane_waypoint_idx)
+
             controllers.append(controller)
-        return controllers 
+
+        return controllers
+
+    def get_road_parallel_path(self, pedestrian, waypoint):
+
+        try:
+
+            roadpos1 = waypoint
+            roadpos2 = KarmaDataProvider.get_closest_driving_lane_waypoint(waypoint.location).next(2)[0].transform
+
+            vectorRoad = roadpos2.location - roadpos1.location
+
+            pedestrian_location = pedestrian.get_transform().location
+
+            distPos1 = roadpos1.location.distance(pedestrian_location)
+            distPos2 = roadpos2.location.distance(pedestrian_location)
+
+            if distPos1 > distPos2:
+
+                dir = vectorRoad * -1
+
+            else:
+
+                dir = vectorRoad
+
+            parallelWaypoint = carla.Transform(location=(pedestrian_location + dir * 5 * KarmaDataProvider.get_rng().randn()), rotation=carla.Rotation())
+
+            return [parallelWaypoint, roadpos2]
+
+
+        except IndexError:
+
+            return [pedestrian.clip_spawn_points[0], waypoint]
+    
+
+    def generate_path(self, pedestrian, waypoint):
+
+        pr = KarmaDataProvider.get_rng().randn()
+
+        if pr < 0.2:
+            # Case 0: Pedestrian directly wants to cross the street:
+            path = [waypoint]
+            laneWaypointPos = 0
+
+        elif pr >= 0.2 and pr < 0.25:
+            # Case 1: Pedestrian starts crossing the street and then regrets and goes back again:
+            path = [waypoint, pedestrian.spawn_point]
+            laneWaypointPos = 0
+
+        elif pr >= 0.25 and pr < 0.75:
+            # Case 2: Pedestrian walks to a point in the path and then decides crossing the street:
+            pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
+            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().randn() < 0.75 else waypoint
+
+            path = [pedNextPos, nextWaypoint]
+            laneWaypointPos = 1
+
+        elif pr >= 0.75 and pr < 0.8:
+            # Case 3: Pedestrian walks to a point in the path, then decides crossing the street, and finally regrets and goes back:
+            pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
+            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().randn() < 0.75 else waypoint
+
+            path = [pedNextPos, nextWaypoint, pedNextPos]
+            laneWaypointPos = 1
+
+        elif pr >= 0.8:
+            # Case 4: Pedestrian walks to a point in the path and never decides to cross the street:
+            pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
+            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().randn() < 0.75 else waypoint
+            
+            path = [pedNextPos]
+            laneWaypointPos = -1
+
+        return [path, laneWaypointPos]
     
 
 
