@@ -86,7 +86,7 @@ def main(args):
     setup_logging(args.loglevel)
 
     # handle config file
-    if args.config:
+    if hasattr(args, 'config') and args.config:
         with open(args.config, 'r') as f:
             kwargs.update(yaml.load(f, Loader=Loader))
 

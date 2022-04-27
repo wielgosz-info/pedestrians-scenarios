@@ -33,4 +33,5 @@ COPY --chown=${USERNAME}:${USERNAME} . /app
 # "Install" scenario_runner, so that srunner imports succeed
 RUN ln -s /app/third_party/scenario_runner/srunner /venv/lib/python3.8/site-packages/srunner
 # needed to find the example scenarios
-ENV SCENARIO_RUNNER_ROOT=/app/third_party/scenario_runner
+#ENV SCENARIO_RUNNER_ROOT=/app/third_party/scenario_runner
+ENV SCENARIO_RUNNER_ROOT=/app/src/pedestrians_scenarios/scenarios

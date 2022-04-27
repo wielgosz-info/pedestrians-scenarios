@@ -1,5 +1,7 @@
+import ast
 from functools import lru_cache
 import logging
+import os
 from queue import Empty, Queue
 from typing import List
 
@@ -11,6 +13,7 @@ from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 
 import pandas as pd
 import numpy as np
+
 
 class KarmaDataProvider(CarlaDataProvider):
     """
@@ -69,7 +72,8 @@ class KarmaDataProvider(CarlaDataProvider):
         shift = KarmaDataProvider.get_rng().randn() * waypoint_jitter_scale
         shifted_waypoint = random_waypoint
         try:
-            if shift > 0.02: # if the distances are too small, the shifted waypoint will be the same as the original (2 cm)
+            # if the distances are too small, the shifted waypoint will be the same as the original (2 cm)
+            if shift > 0.02:
                 shifted_waypoint = random_waypoint.next(shift)[0]
             elif shift < -0.02:
                 shifted_waypoint = random_waypoint.previous(-shift)[0]
@@ -128,39 +132,48 @@ class KarmaDataProvider(CarlaDataProvider):
 
     @staticmethod
     def load_spawnpoints_blacklist():
-    
+
+        map_name = os.path.basename(CarlaDataProvider._map.name)
         try:
-            map_name = CarlaDataProvider._map.name.split("/")[-1]
-            blacklist_str = pd.read_csv('spawnpoints_blacklist/' + map_name + '.csv')['0']
+            spawnpoints_blacklist = pd.read_csv(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    '..',
+                    'spawnpoints_blacklist',
+                    map_name + '.csv',
+                ),
+                converters={
+                    '0': lambda x: convert_list_to_transform(ast.literal_eval(x))
+                }
+            )['0'].to_list()
         except:
-            logging.getLogger(__name__).debug('Cannot find spawnpoints blacklist for current map.')
+            logging.getLogger(__name__).debug(
+                f'Cannot find spawnpoints blacklist for map {map_name}.')
             return []
-    
-        spawnpoints_blacklist = blacklist_str.apply(lambda x: convert_list_to_transform(list(map(float, x[1:-1].split(', ')))))
-            
+
         return spawnpoints_blacklist
-    
+
     @staticmethod
     def filter_pedestrian_spawnpoints(pedestrian_spawn_points):
 
         spawnpoints_blacklist = KarmaDataProvider.load_spawnpoints_blacklist()
-        
+
         filtered_spawn_points = []
-        
+
         for ped_spawnpoint in pedestrian_spawn_points:
-            
+
             addSpawnpoint = True
-            
+
             for blacklisted_spawnpoint in spawnpoints_blacklist:
                 dist = ped_spawnpoint.location.distance(blacklisted_spawnpoint.location)
-                                
+
                 if dist < 15:
                     addSpawnpoint = False
                     break
-                    
+
             if addSpawnpoint:
                 filtered_spawn_points.append(ped_spawnpoint)
-        
+
         return filtered_spawn_points
 
     @staticmethod
@@ -170,10 +183,12 @@ class KarmaDataProvider(CarlaDataProvider):
             carla.Transform(KarmaDataProvider.get_world(
             ).get_random_location_from_navigation())
             for _ in range(len(KarmaDataProvider._spawn_points))
-        ]        
-        pedestrian_spawn_points = KarmaDataProvider.filter_pedestrian_spawnpoints(pedestrian_spawn_points)
+        ]
+        pedestrian_spawn_points = KarmaDataProvider.filter_pedestrian_spawnpoints(
+            pedestrian_spawn_points)
         if len(pedestrian_spawn_points) == 0:
-            raise RuntimeError('All pedestrian spawnpoints have been filtered and pedestrian spawnpoints list is now empty.')
+            raise RuntimeError(
+                'All pedestrian spawnpoints have been filtered and pedestrian spawnpoints list is now empty.')
         KarmaDataProvider.get_rng().shuffle(pedestrian_spawn_points)
         KarmaDataProvider._pedestrian_spawn_points = pedestrian_spawn_points
         KarmaDataProvider._pedestrian_spawn_index = 0

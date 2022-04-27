@@ -55,3 +55,6 @@ MANIFEST
 
 #checkpoints
 *.weights
+
+# core dumps
+core.*

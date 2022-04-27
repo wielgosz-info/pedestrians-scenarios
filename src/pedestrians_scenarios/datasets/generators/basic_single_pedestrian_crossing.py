@@ -5,14 +5,15 @@ import numpy as np
 from pedestrians_scenarios.karma.karma_data_provider import KarmaDataProvider
 from pedestrians_scenarios.karma.utils.deepcopy import deepcopy_transform
 from pedestrians_scenarios.pedestrian_controls.basic_pedestrian_control import BasicPedestrianControl
-from pedestrians_scenarios.datasets.generator import Generator, BatchGenerator, PedestrianProfile
+from .batch_generator import BatchGenerator, PedestrianProfile
+from .generator import Generator
 from pedestrians_scenarios.karma.walker import Walker
 import carla
 
 
 class BasicSinglePedestrianCrossingBatch(BatchGenerator):
     """
-    Creates dataset with randomized pedestrians crossing the street.
+    Creates dataset with randomized pedestrians crossing (or not) the street.
     Pedestrians are controlled by BasicPedestrianControl.
     Each clip should contain a single pedestrian crossing the street,
     HOWEVER, due to concurrent data generation, the pedestrians other
@@ -80,7 +81,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
             controller = BasicPedestrianControl(pedestrian)
             controller.update_target_speed(self._rng.normal(
                 profile.crossing_speed.mean, profile.crossing_speed.std))
-            
+
             waypoints_path, lane_waypoint_idx = self.generate_path(pedestrian, waypoint)
             controller.update_waypoints(waypoints_path)
             controller.set_lane_waypoint(lane_waypoint_idx)
@@ -94,7 +95,8 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
         try:
 
             roadpos1 = waypoint
-            roadpos2 = KarmaDataProvider.get_closest_driving_lane_waypoint(waypoint.location).next(2)[0].transform
+            roadpos2 = KarmaDataProvider.get_closest_driving_lane_waypoint(
+                waypoint.location).next(2)[0].transform
 
             vectorRoad = roadpos2.location - roadpos1.location
 
@@ -111,15 +113,14 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
 
                 dir = vectorRoad
 
-            parallelWaypoint = carla.Transform(location=(pedestrian_location + dir * 5 * KarmaDataProvider.get_rng().randn()), rotation=carla.Rotation())
+            parallelWaypoint = carla.Transform(location=(
+                pedestrian_location + dir * 5 * KarmaDataProvider.get_rng().randn()), rotation=carla.Rotation())
 
             return [parallelWaypoint, roadpos2]
-
 
         except IndexError:
 
             return [pedestrian.clip_spawn_points[0], waypoint]
-    
 
     def generate_path(self, pedestrian, waypoint):
 
@@ -155,12 +156,11 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
             # Case 4: Pedestrian walks to a point in the path and never decides to cross the street:
             pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
             nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().randn() < 0.75 else waypoint
-            
+
             path = [pedNextPos]
             laneWaypointPos = -1
 
         return [path, laneWaypointPos]
-    
 
 
 class BasicSinglePedestrianCrossing(Generator):
