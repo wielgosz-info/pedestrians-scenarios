@@ -4,22 +4,26 @@ import math
 import os
 import warnings
 from typing import Iterable, List, Dict, Any
+import matplotlib
 
 import numpy as np
 import pims
 import av
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 from .renderer import Renderer
 from .points_renderer import PointsRenderer
 
 
 class SourceVideosRenderer(Renderer):
+    labels_font = ImageFont.load_default()
+
     def __init__(
         self,
         data_dir: str,
         overlay_skeletons: bool = False,
         center_bboxes: bool = True,
-        overlay_bboxes=False,
+        overlay_bboxes: bool = False,
+        overlay_labels: bool = True,
         **kwargs
     ) -> None:
         super().__init__(**kwargs)
@@ -28,6 +32,14 @@ class SourceVideosRenderer(Renderer):
         self.__overlay_skeletons = overlay_skeletons
         self.__overlay_bboxes = overlay_bboxes
         self.__center_bboxes = center_bboxes
+        self.__overlay_labels = overlay_labels
+
+        if self.overlay_labels:
+            system_fonts = matplotlib.font_manager.findSystemFonts(
+                fontpaths=None, fontext='ttf')
+            if len(system_fonts):
+                SourceVideosRenderer.labels_font = ImageFont.truetype(
+                    system_fonts[0], size=24)
 
     @property
     def overlay_skeletons(self) -> bool:
@@ -36,6 +48,10 @@ class SourceVideosRenderer(Renderer):
     @property
     def overlay_bboxes(self) -> bool:
         return self.__overlay_bboxes
+
+    @property
+    def overlay_labels(self) -> bool:
+        return self.__overlay_labels
 
     def render(self, meta: List[Dict[str, Any]], bboxes: Iterable[np.ndarray] = None, **kwargs) -> List[np.ndarray]:
         warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -58,14 +74,15 @@ class SourceVideosRenderer(Renderer):
             )
             yield video
 
-    def render_clip(self, video_id, pedestrian_id, clip_id, start_frame, end_frame, bboxes=None, skeletons=None):
+    def render_clip(self, video_id, pedestrian_id, clip_id, start_frame, end_frame, bboxes=None, skeletons=None, labels=None):
         (canvas_width, canvas_height) = self._image_size
         half_width = int(math.floor(canvas_width / 2))
         half_height = int(math.floor(canvas_height / 2))
         canvas = np.zeros((end_frame - start_frame, canvas_height,
                           canvas_width, 3), dtype=np.uint8)
 
-        paths = glob.glob(os.path.join(self.__data_dir, '{}.*'.format(os.path.splitext(video_id)[0])))
+        paths = glob.glob(os.path.join(
+            self.__data_dir, '{}.*'.format(os.path.splitext(video_id)[0])))
         try:
             assert len(paths) == 1
             with pims.PyAVReaderIndexed(paths[0]) as video:
@@ -90,8 +107,10 @@ class SourceVideosRenderer(Renderer):
                                           'keypoints': np.array(sk['keypoints'][idx], np.int32),
                                           'color': sk['color'],
                                           'type': sk['type']
-                                      } for sk in skeletons] if skeletons is not None and self.__overlay_skeletons else None,
-                                      bbox=bboxes[idx] if bboxes is not None and self.__overlay_bboxes else None
+                                      } for sk in skeletons] if skeletons is not None and self.overlay_skeletons else None,
+                                      bbox=bboxes[idx] if bboxes is not None and self.overlay_bboxes else None,
+                                      labels={k: v[idx] for k, v in labels.items(
+                                      )} if labels is not None and self.overlay_labels else None,
                                       )
         except AssertionError:
             # no video or multiple candidates - skip
@@ -100,8 +119,8 @@ class SourceVideosRenderer(Renderer):
 
         return canvas
 
-    @staticmethod
-    def render_frame(canvas, clip, frame_half_size, bbox_center, clip_size, skeletons=None, bbox=None):
+    @ staticmethod
+    def render_frame(canvas, clip, frame_half_size, bbox_center, clip_size, skeletons=None, bbox=None, labels=None):
         (half_width, half_height) = frame_half_size
         (x_center, y_center) = bbox_center
         (clip_width, clip_height) = clip_size
@@ -123,22 +142,34 @@ class SourceVideosRenderer(Renderer):
                     canvas, skeleton, (canvas_x_shift-frame_x_min, canvas_y_shift-frame_y_min))
 
         if bbox is not None:
-            SourceVideosRenderer.overlay_bbox(canvas, bbox, (canvas_x_shift-frame_x_min, canvas_y_shift-frame_y_min))
+            SourceVideosRenderer.overlay_bbox(
+                canvas, bbox, (canvas_x_shift-frame_x_min, canvas_y_shift-frame_y_min))
+
+        if labels is not None:
+            SourceVideosRenderer.overlay_labels(
+                canvas, labels)
 
         return canvas
 
     @staticmethod
     def overlay_bbox(canvas, bbox, shift=(0, 0)):
         ((x_min, y_min), (x_max, y_max)) = bbox
-        (x_min, y_min, x_max, y_max) = (x_min+shift[0], y_min+shift[1], x_max+shift[0], y_max+shift[1])
+        (x_min, y_min, x_max, y_max) = (
+            x_min+shift[0], y_min+shift[1], x_max+shift[0], y_max+shift[1])
 
-        end = canvas.shape[-1]
-        has_alpha = end == 4
-        img = Image.fromarray(canvas, 'RGBA' if has_alpha else 'RGB')
-        draw = ImageDraw.Draw(img, 'RGBA' if has_alpha else 'RGB')
+        img, draw, end = SourceVideosRenderer.get_img_draw(canvas)
         draw.rectangle((x_min, y_min, x_max, y_max), outline=(0, 0, 255, 255)[:end])
 
         canvas[:] = np.array(img)
+
+    @staticmethod
+    def get_img_draw(canvas):
+        no_channels = canvas.shape[-1]
+        has_alpha = no_channels == 4
+        img = Image.fromarray(canvas, 'RGBA' if has_alpha else 'RGB')
+        draw = ImageDraw.Draw(img, 'RGBA' if has_alpha else 'RGB')
+
+        return img, draw, no_channels
 
     @staticmethod
     def overlay_skeleton(canvas, skeleton, shift=(0, 0)):
@@ -156,7 +187,21 @@ class SourceVideosRenderer(Renderer):
             lines=True
         )
 
-        return canvas
+    @staticmethod
+    def overlay_labels(canvas, labels):
+        img, draw, end = SourceVideosRenderer.get_img_draw(canvas)
+
+        text_to_draw = '\n'.join([f'{k}: {v}' for k, v in labels.items()])
+        draw.text(
+            (5, 5),
+            text_to_draw,
+            fill=(0, 0, 0, 255)[:end],
+            stroke_fill=(255, 255, 255, 255)[:end],
+            stroke_width=1,
+            font=SourceVideosRenderer.labels_font,
+            align='left')
+
+        canvas[:] = np.array(img)
 
     def frames_to_video(self, frames: np.ndarray, video_name: str = 'out', outputs_dir: str = None, fps: int = 30) -> None:
         if outputs_dir is None:
