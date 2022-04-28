@@ -79,7 +79,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
         controllers = []
         for pedestrian, profile in zip(pedestrians, profiles):
             controller = BasicPedestrianControl(pedestrian)
-            controller.update_target_speed(self._rng.normal(
+            controller.update_target_speed(KarmaDataProvider.get_rng().normal(
                 profile.crossing_speed.mean, profile.crossing_speed.std))
 
             waypoints_path, lane_waypoint_idx = self.generate_path(pedestrian, waypoint)

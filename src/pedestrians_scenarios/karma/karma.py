@@ -65,6 +65,9 @@ class Karma(object):
         self.__traffic_manager = self.__client.get_trafficmanager(traffic_manager_port)
         KarmaDataProvider.set_traffic_manager_port(traffic_manager_port)
 
+        # reset random seed
+        KarmaDataProvider.get_rng(self.__seed)
+
         self.__world = None
         self.reset_world()
 

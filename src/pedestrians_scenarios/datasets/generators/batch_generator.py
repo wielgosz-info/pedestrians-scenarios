@@ -39,7 +39,6 @@ class BatchGenerator(mp.Process):
                  outputs_dir: str,  # directory where the output video files will be stored
                  # queue to communicate with the main process (to know when the batch is done and how many clips were generated)
                  queue: mp.Queue,
-                 seed: int = 22752,  # each process will use a different seed
                  batch_idx: int = 0,  # index of the batch
                  # how many videos to generate in a single world at the same time (the world is not reset between clips and the created only at the beginning of the batch)
                  batch_size: int = 16,
@@ -72,8 +71,6 @@ class BatchGenerator(mp.Process):
         self._outfile_lock = outfile_lock
         self._outputs_dir = outputs_dir
         self._queue = queue
-
-        self._rng = KarmaDataProvider.get_rng(seed)
 
         self._batch_idx = batch_idx
         self._batch_size = batch_size
@@ -122,7 +119,7 @@ class BatchGenerator(mp.Process):
         By default, this will return a random, single pedestrian profile per clip.
         """
         profiles, weights = zip(*self._pedestrian_distributions)
-        indices = self._rng.choice(np.arange(len(profiles)), size=(
+        indices = KarmaDataProvider.get_rng().choice(np.arange(len(profiles)), size=(
             self._batch_size,), replace=True, p=weights)
         return [(profiles[i],) for i in indices]
 
@@ -193,7 +190,7 @@ class BatchGenerator(mp.Process):
         for camera_idx in range(total_cameras):
             camera_distances = []
             for i in range(3):  # x,y,z
-                camera_distances.append(self._rng.normal(
+                camera_distances.append(KarmaDataProvider.get_rng().normal(
                     loc=self._camera_distances_distributions[camera_idx][i].mean,
                     scale=self._camera_distances_distributions[camera_idx][i].std,
                     size=(self._batch_size,)
@@ -304,7 +301,7 @@ class BatchGenerator(mp.Process):
         """
         Get the map for a batch. All pedestrians in batch will be spawned in the same world at the same time.
         """
-        return self._rng.choice(KarmaDataProvider.get_available_maps())
+        return KarmaDataProvider.get_rng().choice(KarmaDataProvider.get_available_maps())
 
     def generate_batch(self, map_name: str) -> Iterable[Dict]:
         """
