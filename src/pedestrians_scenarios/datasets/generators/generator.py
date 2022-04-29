@@ -1,4 +1,5 @@
 import ast
+import glob
 import logging
 import multiprocessing as mp
 import os
@@ -174,6 +175,9 @@ class Generator(object):
                     logging.getLogger(__name__).warning(
                         f'Process failed for batch {batch_idx}')
                     server_failed += 1
+                    # try to remove 'core.*' files
+                    for core_file in glob.glob(os.path.join(os.getcwd(), 'core.*')):
+                        os.remove(core_file)
                     # assume that the server will restart
                     time.sleep(float(os.getenv('CARLA_SERVER_START_PERIOD', '30.0')))
                     continue
