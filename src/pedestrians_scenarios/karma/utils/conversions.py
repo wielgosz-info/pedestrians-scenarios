@@ -10,7 +10,7 @@ def convert_vector2d_to_list(vector2d: carla.Vector2D) -> List[float]:
 
 
 def convert_list_to_vector2d(vector2d_flat: List[float]) -> carla.Vector2D:
-    return carla.Vector2D(x=vector2d_flat[0], y=vector2d_flat[1])
+    return carla.Vector2D(x=float(vector2d_flat[0]), y=float(vector2d_flat[1]))
 
 
 def convert_vector3d_to_list(vector3d: carla.Vector3D) -> List[float]:

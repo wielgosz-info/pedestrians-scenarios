@@ -1,9 +1,10 @@
-from typing import Iterable, List
+from distutils.spawn import spawn
+from typing import Iterable, List, Tuple
 
 import numpy as np
 
 from pedestrians_scenarios.karma.karma_data_provider import KarmaDataProvider
-from pedestrians_scenarios.karma.utils.deepcopy import deepcopy_transform
+from pedestrians_scenarios.karma.utils.deepcopy import deepcopy_rotation, deepcopy_transform
 from pedestrians_scenarios.pedestrian_controls.basic_pedestrian_control import BasicPedestrianControl
 from .batch_generator import BatchGenerator, PedestrianProfile
 from .generator import Generator
@@ -49,26 +50,24 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
 
         return camera_look_at
 
-    def setup_clip_pedestrians(self, clip_idx: int, pedestrians: Iterable[Walker], profiles: Iterable[PedestrianProfile], camera_look_at: Iterable[carla.Transform]) -> None:
+    def rotate_pedestrian_towards_waypoint(self, pedestrian: Walker, waypoint: carla.Transform) -> None:
         """
         Setup the pedestrians in a single clip.
         This method is called before get_clip_pedestrians_control().
         It should not tick the world.
         """
-        waypoint = camera_look_at[0]
 
-        for pedestrian in pedestrians:
-            direction_unit = (waypoint.location -
-                              pedestrian.get_transform().location)
-            direction_unit.z = 0  # ignore height
-            direction_unit = direction_unit.make_unit_vector()
+        direction_unit = (waypoint.location -
+                          pedestrian.get_transform().location)
+        direction_unit.z = 0  # ignore height
+        direction_unit = direction_unit.make_unit_vector()
 
-            # shortcut, since we're ignoring elevation
-            # compute how we need to rotate the pedestrian to face the waypoint
-            pedestrian_transform = deepcopy_transform(pedestrian.get_transform())
-            delta = np.rad2deg(np.arctan2(direction_unit.y, direction_unit.x))
-            pedestrian_transform.rotation.yaw = pedestrian_transform.rotation.yaw + delta
-            pedestrian.set_transform(pedestrian_transform)
+        # shortcut, since we're ignoring elevation
+        # compute how we need to rotate the pedestrian to face the waypoint
+        pedestrian_transform = deepcopy_transform(pedestrian.get_transform())
+        delta = np.rad2deg(np.arctan2(direction_unit.y, direction_unit.x))
+        pedestrian_transform.rotation.yaw = pedestrian_transform.rotation.yaw + delta
+        pedestrian.set_transform(pedestrian_transform)
 
     def get_clip_pedestrians_control(self, clip_idx: int, pedestrians: Iterable[Walker], profiles: Iterable[PedestrianProfile], camera_look_at: Iterable[carla.Transform]) -> Iterable[BasicPedestrianControl]:
         """
@@ -83,48 +82,48 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
                 profile.crossing_speed.mean, profile.crossing_speed.std))
 
             waypoints_path, lane_waypoint_idx = self.generate_path(pedestrian, waypoint)
+            self.rotate_pedestrian_towards_waypoint(pedestrian, waypoints_path[0])
+
             controller.update_waypoints(waypoints_path)
-            controller.set_lane_waypoint(lane_waypoint_idx)
+            controller.set_lane_waypoint_idx(lane_waypoint_idx)
 
             controllers.append(controller)
 
         return controllers
 
-    def get_road_parallel_path(self, pedestrian, waypoint):
+    def get_road_parallel_path(self, pedestrian, waypoint, max_distance=5.0):
+        spawn_point = pedestrian.get_transform()
 
         try:
+            lane_waypoint = KarmaDataProvider.get_closest_driving_lane_waypoint(
+                waypoint.location
+            )
 
-            roadpos1 = waypoint
-            roadpos2 = KarmaDataProvider.get_closest_driving_lane_waypoint(
-                waypoint.location).next(2)[0].transform
-
-            vectorRoad = roadpos2.location - roadpos1.location
-
-            pedestrian_location = pedestrian.get_transform().location
-
-            distPos1 = roadpos1.location.distance(pedestrian_location)
-            distPos2 = roadpos2.location.distance(pedestrian_location)
-
-            if distPos1 > distPos2:
-
-                dir = vectorRoad * -1
-
+            if KarmaDataProvider.get_rng().randn() < 0:
+                next_waypoint = lane_waypoint.next(max_distance)[0].transform
             else:
+                next_waypoint = lane_waypoint.previous(max_distance)[0].transform
 
-                dir = vectorRoad
+            direction_unit = next_waypoint.location - waypoint.location
+            direction_unit.z = 0  # ignore height
+            direction_unit = direction_unit.make_unit_vector()
 
-            parallelWaypoint = carla.Transform(location=(
-                pedestrian_location + dir * 5 * KarmaDataProvider.get_rng().randn()), rotation=carla.Rotation())
+            parallel_location_shift = direction_unit * \
+                max_distance * KarmaDataProvider.get_rng().uniform()
 
-            return [parallelWaypoint, roadpos2]
+            parallel_waypoint = carla.Transform(
+                location=(spawn_point.location + parallel_location_shift),
+            )
+
+            return [parallel_waypoint, next_waypoint]
 
         except IndexError:
 
-            return [pedestrian.clip_spawn_points[0], waypoint]
+            return [spawn_point, waypoint]
 
-    def generate_path(self, pedestrian, waypoint):
-
-        pr = KarmaDataProvider.get_rng().randn()
+    def generate_path(self, pedestrian, waypoint) -> Tuple[List[carla.Transform], int]:
+        spawn_point = pedestrian.get_transform()
+        pr = KarmaDataProvider.get_rng().uniform()
 
         if pr < 0.2:
             # Case 0: Pedestrian directly wants to cross the street:
@@ -133,13 +132,13 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
 
         elif pr >= 0.2 and pr < 0.25:
             # Case 1: Pedestrian starts crossing the street and then regrets and goes back again:
-            path = [waypoint, pedestrian.spawn_point]
+            path = [waypoint, spawn_point]
             laneWaypointPos = 0
 
         elif pr >= 0.25 and pr < 0.75:
             # Case 2: Pedestrian walks to a point in the path and then decides crossing the street:
             pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
-            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().randn() < 0.75 else waypoint
+            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().uniform() < 0.75 else waypoint
 
             path = [pedNextPos, nextWaypoint]
             laneWaypointPos = 1
@@ -147,7 +146,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
         elif pr >= 0.75 and pr < 0.8:
             # Case 3: Pedestrian walks to a point in the path, then decides crossing the street, and finally regrets and goes back:
             pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
-            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().randn() < 0.75 else waypoint
+            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().uniform() < 0.75 else waypoint
 
             path = [pedNextPos, nextWaypoint, pedNextPos]
             laneWaypointPos = 1
@@ -155,7 +154,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
         elif pr >= 0.8:
             # Case 4: Pedestrian walks to a point in the path and never decides to cross the street:
             pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
-            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().randn() < 0.75 else waypoint
+            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().uniform() < 0.75 else waypoint
 
             path = [pedNextPos]
             laneWaypointPos = -1

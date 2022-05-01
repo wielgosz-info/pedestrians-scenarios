@@ -41,7 +41,7 @@ class BatchGenerator(mp.Process):
                  queue: mp.Queue,
                  batch_idx: int = 0,  # index of the batch
                  # how many videos to generate in a single world at the same time (the world is not reset between clips and the created only at the beginning of the batch)
-                 batch_size: int = 16,
+                 batch_size: int = 1,
                  clip_length_in_frames: int = 600,
                  # there is problem with kids in real datasets, there are only few of them,
                  # in our case have equal number of adults and children which is less realistic but more useful
@@ -244,9 +244,10 @@ class BatchGenerator(mp.Process):
 
     def setup_clip_pedestrians(self, clip_idx: int, pedestrians: Iterable[Walker], profiles: Iterable[PedestrianProfile], camera_look_at: Iterable[carla.Transform]) -> None:
         """
-        Setup the pedestrians in a single clip.
+        Setup the pedestrians in a single clip (e.g. add props or other things).
+        By default does nothing.
         """
-        raise NotImplementedError()
+        pass
 
     def get_clip_camera_look_at(self, clip_idx: int, pedestrians: Iterable[Walker], camera_distances: Iterable[float]) -> Iterable[carla.Transform]:
         """
@@ -335,6 +336,11 @@ class BatchGenerator(mp.Process):
 
         controllers = self.get_pedestrians_control(
             pedestrians, profiles, camera_look_at)
+
+        # apply settings to pedestrians by ticking the world in case controllers needed to
+        # update something (e.g. rotate pedestrians to face desired trajectory)
+        self._karma.tick()
+
         for clip_controllers in controllers:
             for controller in clip_controllers:
                 self._karma.register_controller(controller)
@@ -383,7 +389,8 @@ class BatchGenerator(mp.Process):
             clip_reached_first_waypoint = []
             for controller in clip_controllers:
                 self._karma.unregister_controller(controller)
-                clip_reached_first_waypoint.append(controller.reached_first_waypoint)
+                clip_reached_first_waypoint.append(
+                    controller.check_reached_first_waypoint())
             reached_first_waypoint.append(
                 len(clip_reached_first_waypoint) > 0 and all(clip_reached_first_waypoint))
 
@@ -447,7 +454,7 @@ class BatchGenerator(mp.Process):
             ]
 
             clip_id = str(uuid4())  # make it unique in dataset
-            skipped = False
+            clip_data = []
 
             for manager_idx, manager in enumerate(clip_managers):
                 recording: str = recordings[clip_idx][manager_idx] if len(
@@ -456,7 +463,6 @@ class BatchGenerator(mp.Process):
                 if recording is None:
                     logging.getLogger(__name__).info(
                         f'No recording was created for clip {clip_idx} camera {manager_idx}, skipping.')
-                    skipped = True
                     continue
 
                 clip_recorded_frames: Iterable[int] = sorted(
@@ -471,6 +477,10 @@ class BatchGenerator(mp.Process):
                     max_frame = clip_recorded_frames[-1]
 
                     skip = 0
+                    # TODO: if projections are calculated, we can use them to check if the pedestrian is visible
+                    # in at least one frame for this camera; only add to batch_data if true
+                    camera_data = []
+                    has_pedestrian_data = False
                     for frame_idx, world_frame in enumerate(range(min_frame, max_frame + 1)):
                         # skip frame if it is not in the recorded frames - we do not want to have
                         # indexing differences between video and captured data
@@ -518,10 +528,19 @@ class BatchGenerator(mp.Process):
                                 )
                                 full_frame_data['frame.pedestrian.pose.camera'] = convert_pose_2d_dict_to_list(
                                     camera_pose)
+                                if not has_pedestrian_data:
+                                    has_pedestrian_data = np.all(np.isfinite(
+                                        full_frame_data['frame.pedestrian.pose.camera']))
 
                             del full_frame_data['frame.pedestrian.id']
 
-                            batch_data.append(full_frame_data)
-            if not skipped:
+                            camera_data.append(full_frame_data)
+
+                    if has_pedestrian_data:
+                        clip_data.extend(camera_data)
+
+            if len(clip_data) > 0:
+                batch_data.extend(clip_data)
                 clips_count += 1
+
         return batch_data, clips_count  # batch_data has been flattened to a list of dicts

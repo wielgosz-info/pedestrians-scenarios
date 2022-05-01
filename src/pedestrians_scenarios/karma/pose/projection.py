@@ -15,9 +15,9 @@ def project_pose(world_pose: PoseDict, camera_transform: carla.Transform, km_cam
 
     # Convert current camera transform from CARLA coordinates
     # to cameratransform coordinates
-    pos_x = -camera_transform.location.x
-    pos_y = camera_transform.location.y
-    elevation = -camera_transform.location.z
+    pos_x = camera_transform.location.x
+    pos_y = -camera_transform.location.y
+    elevation = camera_transform.location.z
     heading_deg = 90 + camera_transform.rotation.yaw
     tilt_deg = 90 + camera_transform.rotation.pitch
     roll_deg = -camera_transform.rotation.roll
@@ -42,9 +42,9 @@ def project_pose(world_pose: PoseDict, camera_transform: carla.Transform, km_cam
 
     # get the 2D pose
     projection = camera_ct.imageFromSpace([
-        (-bone.location.x, bone.location.y, -bone.location.z)
+        (bone.location.x, -bone.location.y, bone.location.z)
         for bone in world_pose.values()
-    ], hide_backpoints=False)
+    ], hide_backpoints=True)
 
     return {
         k: carla.Vector2D(x=v[0], y=v[1])

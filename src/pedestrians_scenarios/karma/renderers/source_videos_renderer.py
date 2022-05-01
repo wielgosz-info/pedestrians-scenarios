@@ -12,6 +12,7 @@ import av
 from PIL import Image, ImageDraw, ImageFont
 from .renderer import Renderer
 from .points_renderer import PointsRenderer
+from tqdm.auto import trange
 
 
 class SourceVideosRenderer(Renderer):
@@ -98,7 +99,7 @@ class SourceVideosRenderer(Renderer):
                     centers = (bboxes.mean(dim=-2) +
                                0.5).round().cpu().numpy().astype(int)
 
-                for idx in range(len(clip)):
+                for idx in trange(len(clip), desc='Frame', leave=False):
                     self.render_frame(canvas[idx], clip[idx],
                                       (half_width, half_height),
                                       centers[idx],
