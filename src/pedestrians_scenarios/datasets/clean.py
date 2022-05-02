@@ -3,6 +3,7 @@ import os
 import sys
 import cv2
 import numpy as np
+import urllib.request
 
 import pandas as pd
 from tqdm.auto import tqdm
@@ -151,15 +152,21 @@ def pedestrian_detection_in_video(video_path, files_list=None, remove=False, yol
     yolov3_cfg = os.path.join(yolo_root, 'yolov3.cfg')
     yolov3_weights = os.path.join(yolo_root, 'yolov3.weights')
 
+    os.makedirs(yolo_root, exist_ok=True)
+
     # check if the files exist if not download them from url and put under current location
     if not os.path.exists(yolov3_cfg):
         logger.info('Downloading yolov3.cfg...')
-        os.system(
-            'wget https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg -O {}'.format(yolov3_cfg))
+        urllib.request.urlretrieve(
+            'https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg',
+            yolov3_cfg
+        )
     if not os.path.exists(yolov3_weights):
         logger.info('Downloading yolov3.weights...')
-        os.system(
-            'wget https://pjreddie.com/media/files/yolov3.weights -O {}'.format(yolov3_weights))
+        urllib.request.urlretrieve(
+            'https://pjreddie.com/media/files/yolov3.weights',
+            yolov3_weights
+        )
 
     # read pre-trained model and config file
     net = cv2.dnn.readNet(yolov3_weights, yolov3_cfg)

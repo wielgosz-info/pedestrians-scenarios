@@ -1,3 +1,4 @@
+import logging
 import pandas as pd
 import os
 import shutil
@@ -35,7 +36,7 @@ def command(input_dirs, output_dir, **kwargs):
     name_regex = re.compile(
         r'(?P<batch_idx>\d+)-(?P<clip_idx>\d+)-(?P<pedestrian_idx>\d+)-(?P<camera_idx>\d+)\.mp4')
 
-    for in_dir in tqdm(input_dirs):
+    for in_dir in tqdm(input_dirs, desc='Input directories'):
         df = pd.read_csv(in_dir + "/data.csv")
 
         if 'frame.pedestrian.is_crossing' in df.columns:
@@ -56,7 +57,7 @@ def command(input_dirs, output_dir, **kwargs):
             df.drop(columns=['frame.pedestrian.id'], inplace=True)
 
         clip_groups = df.groupby(by=['id', 'camera.recording'])
-        for (clip_id, clip_path), index in tqdm(clip_groups.groups.items()):
+        for (clip_id, clip_path), index in tqdm(clip_groups.groups.items(), leave=False, desc='Clips'):
             name_regex_match = name_regex.match(os.path.basename(clip_path))
             if name_regex_match:
                 new_name = '{}-{}-{}.mp4'.format(
@@ -72,10 +73,12 @@ def command(input_dirs, output_dir, **kwargs):
                 shutil.copyfile(os.path.join(in_dir, clip_path), new_path)
         dfs.append(df)
 
+    logging.getLogger(__name__).info('Merging & postprocessing dataframes...')
     df = pd.concat(dfs)
 
     df['frame.pedestrian.is_crossing'].fillna(True, inplace=True)
     df['camera.width'].fillna(800, inplace=True)
     df['camera.height'].fillna(600, inplace=True)
 
+    logging.getLogger(__name__).info('Saving dataframe...')
     df.to_csv(os.path.join(output_dir, 'data.csv'), index=False, header=True)
