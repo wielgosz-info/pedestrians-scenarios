@@ -1,3 +1,4 @@
+import ast
 import logging
 import os
 import sys
@@ -54,10 +55,14 @@ def command(dataset_dir, yolo_root, remove, **kwargs):
     csv_path = os.path.join(dataset_dir, 'data.csv')
     video_path = os.path.join(dataset_dir, 'clips')
 
-    file_names_common = sync_csv_and_videos(csv_path, video_path, remove=remove)
+    df = trim_usless_rows(csv_path, remove=remove)
+
+    # TODO: edit the actual video files and update frame indices in the CSV?
+
+    file_names_common, df = sync_csv_and_videos(csv_path, video_path, remove=remove, df=df)
     file_names_no_pedestrians = pedestrian_detection_in_video(
-        video_path, file_names_common, remove, yolo_root)
-    sync_csv_and_videos(csv_path, video_path, file_names_no_pedestrians, remove=remove)
+        video_path, file_names_common, remove=remove, yolo_root=yolo_root)
+    sync_csv_and_videos(csv_path, video_path, file_names_no_pedestrians, remove=remove, df=df)
 
 
 def print_files_info(files_in_dir, files_in_csv,
@@ -73,15 +78,13 @@ def print_files_info(files_in_dir, files_in_csv,
         len(remove_from_csv)))
 
 
-def sync_csv_and_videos(csv_path, video_path, removed_from_dir_dry=None, remove=False):
+def sync_csv_and_videos(csv_path, video_path, removed_from_dir_dry=None, remove=False, df=None):
     """
     This function makes sure that the videos and the csv are in sync.
     """
-    logger.info('Starting CSV and video files synchronization.')
+    logger.info('Starting CSV and video files synchronization...')
 
-    logger.info('Loading dataset from CSV (this may take a while)...')
-    df = pd.read_csv(csv_path)
-    logger.info('Dataset loaded.')
+    df = get_df(csv_path, df)
 
     (files_in_dir, files_in_csv,
      common_files,
@@ -93,6 +96,11 @@ def sync_csv_and_videos(csv_path, video_path, removed_from_dir_dry=None, remove=
         common_files,
         remove_from_dir, remove_from_csv)
 
+    if len(remove_from_csv):
+        remove_from_csv_prefixed = [os.path.join(
+                'clips', element) for element in remove_from_csv]
+        df = df[~df['camera.recording'].isin(remove_from_csv_prefixed)]
+
     if remove:
         if len(remove_from_dir):
             for element in tqdm(remove_from_dir, desc='Removing the files'):
@@ -100,14 +108,11 @@ def sync_csv_and_videos(csv_path, video_path, removed_from_dir_dry=None, remove=
 
         if len(remove_from_csv):
             logger.info('Saving updated CSV.')
-            remove_from_csv_prefixed = [os.path.join(
-                'clips', element) for element in remove_from_csv]
-            df = df[~df['camera.recording'].isin(remove_from_csv_prefixed)]
             df.to_csv(csv_path, index=False)
 
     logger.info('CSV and video files synchronization done.')
 
-    return common_files
+    return common_files, df
 
 
 def get_file_lists(video_path, df, removed_from_dir_dry=None):
@@ -128,10 +133,12 @@ def get_file_lists(video_path, df, removed_from_dir_dry=None):
     return files_in_dir, files_in_csv, common_files, remove_from_dir, remove_from_csv
 
 
-# functions
 def get_output_layers(net):
     layer_names = net.getLayerNames()
-    output_layers = [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+    output_layers = [
+        layer_names[(i if type(i) == np.int32 else i[0]) - 1]
+        for i in net.getUnconnectedOutLayers()
+    ]
     return output_layers
 
 
@@ -227,9 +234,9 @@ def pedestrian_detection_in_video(video_path, files_list=None, remove=False, yol
         is_pedestrian_in_video = False
 
         for i in indices:
-            i = i[0]
+            if not type(i) == np.int32:
+                i = i[0]
             if class_ids[i] == 0:
-                # print('pedestrian is present')
                 is_pedestrian_in_video = True
                 break
 
@@ -245,3 +252,61 @@ def pedestrian_detection_in_video(video_path, files_list=None, remove=False, yol
             os.remove(os.path.join(video_path, file_name))
 
     return files_to_be_removed
+
+
+def has_pedestrian_in_frame(row):
+    frame_width = row.get('camera.width', 800)
+    frame_height = row.get('camera.height', 600)
+
+    projection_2d = np.array(ast.literal_eval(row['frame.pedestrian.pose.camera'].replace('nan', '"nan"')), dtype=np.float32)
+    
+    has_pedestrian_in_frame = np.any(
+        projection_2d >= 0) & np.any(
+        projection_2d[..., 0] <= frame_width) & np.any(
+        projection_2d[..., 1] <= frame_height)
+
+    return has_pedestrian_in_frame
+
+
+def trim_usless_rows(csv_path, remove=False, df=None):
+    logger.info('Starting CSV rows trimming...')
+
+    df = get_df(csv_path, df)
+
+    original_size = len(df)
+
+    # annotate if frame has even a fragment of a pedestrian
+    logger.info('Finding frames with at least a fragment of a pedestrian...')
+    has_pedestrian_in_frame_mask = df.apply(has_pedestrian_in_frame, axis=1)
+
+    # get min/max frame number
+    logger.info('Calculating min/max frame numbers...')
+    grouped = df[has_pedestrian_in_frame_mask].groupby(by=['camera.recording']).aggregate({'frame.idx': ['min', 'max']})
+
+    # only leave rows between min and max frame number
+    # which is not necessary the same as has_pedestrian_in_frame == True
+    logger.info('Calculating dataframe mask...')
+    frame_no_mask = df.apply(lambda row: row['camera.recording'] in grouped.index and row['frame.idx'] >= grouped.loc[row['camera.recording'], ('frame.idx','min')] and row['frame.idx'] <= grouped.loc[row['camera.recording'], ('frame.idx','max')], axis=1)
+
+    # filter the dataframe
+    logger.info('Filtering dataframe...')
+    df = df[frame_no_mask]
+
+    if remove and original_size != len(df):
+        logger.info('Saving updated CSV.')
+        df.to_csv(csv_path, index=False)
+
+    logger.info('Trimming done.')
+
+    return df
+
+def get_df(csv_path, df):
+    if df is None:
+        logger.info('Loading dataset from CSV (this may take a while)...')
+        df = pd.read_csv(csv_path)
+        logger.info('Dataset loaded.')
+    else:
+        logger.info('Using existing dataframe.')
+    return df
+
+    

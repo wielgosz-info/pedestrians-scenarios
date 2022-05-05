@@ -1,22 +1,30 @@
-import pedestrians_scenarios.karma as km
-from .generators.basic_single_pedestrian_crossing import BasicSinglePedestrianCrossing
+try:
+    import pedestrians_scenarios.karma as km
+    from .generators.basic_single_pedestrian_crossing import BasicSinglePedestrianCrossing
 
-def add_cli_args(parser):
-    parser = km.karma.Karma.add_cli_args(parser)
+    def add_cli_args(parser):
+        parser = km.karma.Karma.add_cli_args(parser)
 
-    # TODO: this can depend on the requested type of dataset in the future
-    parser = BasicSinglePedestrianCrossing.add_cli_args(parser)
+        # TODO: this can depend on the requested type of dataset in the future
+        parser = BasicSinglePedestrianCrossing.add_cli_args(parser)
 
-    return parser
+        return parser
 
-def command(**kwargs):
-    """Command line interface for generating datasets.
+    def command(**kwargs):
+        """Command line interface for generating datasets.
 
-    :param kwargs: parsed command line arguments
-    :type kwargs: Dict
-    """
+        :param kwargs: parsed command line arguments
+        :type kwargs: Dict
+        """
 
-    # TODO: this can depend on the requested type of dataset in the future
-    generator = BasicSinglePedestrianCrossing(**kwargs)
+        # TODO: this can depend on the requested type of dataset in the future
+        generator = BasicSinglePedestrianCrossing(**kwargs)
 
-    generator.generate()
+        generator.generate()
+
+except ModuleNotFoundError as e:
+    def add_cli_args(parser):
+        return parser
+
+    def command(**kwargs):
+        raise NotImplementedError("This command is only available when `carla` package is installed.") from e
