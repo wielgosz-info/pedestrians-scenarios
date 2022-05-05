@@ -38,3 +38,24 @@ class Rotation(object):
         self.pitch = pitch
         self.yaw = yaw
         self.roll = roll
+
+class Vector3D(object):
+    """
+        This class is a mock of the carla.Vector3D class.
+        It is only used for the rest of the code to work.
+    """
+
+    def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
+        self.x = x
+        self.y = y
+        self.z = z
+
+class Vector2D(object):
+    """
+        This class is a mock of the carla.Vector2D class.
+        It is only used for the rest of the code to work.
+    """
+
+    def __init__(self, x: float = 0.0, y: float = 0.0):
+        self.x = x
+        self.y = y

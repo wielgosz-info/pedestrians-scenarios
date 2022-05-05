@@ -1,5 +1,11 @@
 from typing import List
-import carla
+
+try:
+    import carla
+except ModuleNotFoundError:
+    from . import mock_carla as carla
+    import warnings
+    warnings.warn("Using mock carla.", ImportWarning)
 
 
 def convert_vector2d_to_list(vector2d: carla.Vector2D) -> List[float]:
