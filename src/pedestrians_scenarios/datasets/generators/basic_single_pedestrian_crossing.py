@@ -44,8 +44,16 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
             return []
 
         waypoint = waypoints[0]
+        pedestrian = pedestrians[0]
+
+        pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian.get_transform().location, waypoint.transform)
+        try:
+            previous_road_position = KarmaDataProvider.get_closest_driving_lane_waypoint(pedNextPos.location).previous(3)[0]
+        except IndexError:
+            previous_road_position = roadpos2
+
         camera_look_at: List[carla.Transform] = [
-            waypoint.transform for _ in camera_distances
+            previous_road_position.transform for _ in camera_distances
         ]
 
         return camera_look_at
@@ -73,10 +81,10 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
         """
         Get the pedestrians controls for a single clip.
         """
-        waypoint = camera_look_at[0]
 
         controllers = []
         for pedestrian, profile in zip(pedestrians, profiles):
+            waypoint = KarmaDataProvider.get_shifted_driving_lane_waypoint(pedestrian.get_transform().location, waypoint_jitter_scale=self._waypoint_jitter_scale).transform
             controller = BasicPedestrianControl(pedestrian)
             controller.update_target_speed(KarmaDataProvider.get_rng().normal(
                 profile.crossing_speed.mean, profile.crossing_speed.std))
