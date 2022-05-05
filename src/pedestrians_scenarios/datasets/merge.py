@@ -66,15 +66,20 @@ def command(input_dirs, output_dir, **kwargs):
                     name_regex_match.group('camera_idx'),
                 )
                 new_path = os.path.join(clips_dir, new_name)
-                shutil.copyfile(os.path.join(in_dir, clip_path), new_path)
-                df.loc[index, 'camera.recording'] = os.path.join('clips', new_name)
+                if not os.path.exists(new_path):
+                    # if file already exists, don't copy it - duplicates will be dropped later
+                    shutil.copyfile(os.path.join(in_dir, clip_path), new_path)
+                    df.loc[index, 'camera.recording'] = os.path.join('clips', new_name)
             else:
                 new_path = os.path.join(clips_dir, os.path.basename(clip_path))
-                shutil.copyfile(os.path.join(in_dir, clip_path), new_path)
+                if not os.path.exists(new_path):
+                    # if file already exists, don't copy it - duplicates will be dropped later
+                    shutil.copyfile(os.path.join(in_dir, clip_path), new_path)
         dfs.append(df)
 
     logging.getLogger(__name__).info('Merging & postprocessing dataframes...')
     df = pd.concat(dfs)
+    df.drop_duplicates(subset=['id', 'camera.idx', 'pedestrian.idx', 'frame.idx'], keep='first', inplace=True)
 
     df['frame.pedestrian.is_crossing'].fillna(True, inplace=True)
     df['camera.width'].fillna(800, inplace=True)

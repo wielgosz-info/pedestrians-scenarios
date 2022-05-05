@@ -55,7 +55,7 @@ def command(dataset_dir, yolo_root, remove, **kwargs):
     csv_path = os.path.join(dataset_dir, 'data.csv')
     video_path = os.path.join(dataset_dir, 'clips')
 
-    df = trim_usless_rows(csv_path, remove=remove)
+    df = trim_useless_rows(csv_path, remove=remove)
 
     # TODO: edit the actual video files and update frame indices in the CSV?
 
@@ -95,6 +95,11 @@ def sync_csv_and_videos(csv_path, video_path, removed_from_dir_dry=None, remove=
         files_in_csv,
         common_files,
         remove_from_dir, remove_from_csv)
+
+    if len(remove_from_dir):
+        logger.debug('Will remove from folder:\n' + ('\n'.join(remove_from_dir)))
+    if len(remove_from_csv):
+        logger.debug('Will remove from CSV:\n' + ('\n'.join(remove_from_csv)))
 
     if len(remove_from_csv):
         remove_from_csv_prefixed = [os.path.join(
@@ -245,11 +250,15 @@ def pedestrian_detection_in_video(video_path, files_list=None, remove=False, yol
 
     print('Number of files to be removed after detection (no pedestrians): {}'.format(
         len(files_to_be_removed)))
-    logger.debug('Will remove:\n' + ('\n'.join(files_to_be_removed)))
+
+    if len(files_to_be_removed):
+        logger.debug('Will remove:\n' + ('\n'.join(files_to_be_removed)))
 
     if remove:
         for file_name in tqdm(files_to_be_removed, desc='Removing the files'):
             os.remove(os.path.join(video_path, file_name))
+
+    logger.info('Finished pedestrian detection.')
 
     return files_to_be_removed
 
@@ -261,19 +270,21 @@ def has_pedestrian_in_frame(row):
     projection_2d = np.array(ast.literal_eval(row['frame.pedestrian.pose.camera'].replace('nan', '"nan"')), dtype=np.float32)
     
     has_pedestrian_in_frame = np.any(
-        projection_2d >= 0) & np.any(
+        projection_2d[..., 0] >= 0) & np.any(
+        projection_2d[..., 1] >= 0) & np.any(
         projection_2d[..., 0] <= frame_width) & np.any(
         projection_2d[..., 1] <= frame_height)
 
     return has_pedestrian_in_frame
 
 
-def trim_usless_rows(csv_path, remove=False, df=None):
+def trim_useless_rows(csv_path, remove=False, df=None):
     logger.info('Starting CSV rows trimming...')
 
     df = get_df(csv_path, df)
 
     original_size = len(df)
+    print('Number of rows before trimming: {}'.format(original_size))
 
     # annotate if frame has even a fragment of a pedestrian
     logger.info('Finding frames with at least a fragment of a pedestrian...')
@@ -292,7 +303,10 @@ def trim_usless_rows(csv_path, remove=False, df=None):
     logger.info('Filtering dataframe...')
     df = df[frame_no_mask]
 
-    if remove and original_size != len(df):
+    new_size = len(df)
+    print('Number of rows after trimming: {} (removed {}%).'.format(new_size, round((original_size - new_size) / original_size * 100, 2)))
+
+    if remove and original_size != new_size:
         logger.info('Saving updated CSV.')
         df.to_csv(csv_path, index=False)
 
