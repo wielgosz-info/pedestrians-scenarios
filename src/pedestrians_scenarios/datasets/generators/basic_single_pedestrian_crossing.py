@@ -138,7 +138,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
         elif pr >= 0.25 and pr < 0.75:
             # Case 2: Pedestrian walks to a point in the path and then decides crossing the street:
             pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
-            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().uniform() < 0.75 else waypoint
+            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().uniform() < 0.2 else KarmaDataProvider.get_closest_driving_lane_waypoint(pedNextPos.location).transform
 
             path = [pedNextPos, nextWaypoint]
             laneWaypointPos = 1
@@ -146,7 +146,7 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
         elif pr >= 0.75 and pr < 0.8:
             # Case 3: Pedestrian walks to a point in the path, then decides crossing the street, and finally regrets and goes back:
             pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
-            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().uniform() < 0.75 else waypoint
+            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().uniform() < 0.2 else KarmaDataProvider.get_closest_driving_lane_waypoint(pedNextPos.location).transform
 
             path = [pedNextPos, nextWaypoint, pedNextPos]
             laneWaypointPos = 1
@@ -154,7 +154,6 @@ class BasicSinglePedestrianCrossingBatch(BatchGenerator):
         elif pr >= 0.8:
             # Case 4: Pedestrian walks to a point in the path and never decides to cross the street:
             pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
-            nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().uniform() < 0.75 else waypoint
 
             path = [pedNextPos]
             laneWaypointPos = -1
