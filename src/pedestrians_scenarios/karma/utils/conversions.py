@@ -8,18 +8,18 @@ except ModuleNotFoundError:
     warnings.warn("Using mock carla.", ImportWarning)
 
 
-def convert_vector2d_to_list(vector2d: carla.Vector2D) -> List[float]:
+def convert_vector2d_to_list(vector2d: 'carla.Vector2D') -> List[float]:
     return [
         vector2d.x,
         vector2d.y,
     ]
 
 
-def convert_list_to_vector2d(vector2d_flat: List[float]) -> carla.Vector2D:
+def convert_list_to_vector2d(vector2d_flat: List[float]) -> 'carla.Vector2D':
     return carla.Vector2D(x=float(vector2d_flat[0]), y=float(vector2d_flat[1]))
 
 
-def convert_vector3d_to_list(vector3d: carla.Vector3D) -> List[float]:
+def convert_vector3d_to_list(vector3d: 'carla.Vector3D') -> List[float]:
     return [
         vector3d.x,
         vector3d.y,
@@ -27,11 +27,11 @@ def convert_vector3d_to_list(vector3d: carla.Vector3D) -> List[float]:
     ]
 
 
-def convert_list_to_vector3d(vector3d_flat: List[float]) -> carla.Vector3D:
+def convert_list_to_vector3d(vector3d_flat: List[float]) -> 'carla.Vector3D':
     return carla.Vector3D(x=vector3d_flat[0], y=vector3d_flat[1], z=vector3d_flat[2])
 
 
-def convert_transform_to_list(transform: carla.Transform) -> List[float]:
+def convert_transform_to_list(transform: 'carla.Transform') -> List[float]:
     return [
         transform.location.x,
         transform.location.y,
@@ -42,7 +42,7 @@ def convert_transform_to_list(transform: carla.Transform) -> List[float]:
     ]
 
 
-def convert_list_to_transform(transform_flat: List[float]) -> carla.Transform:
+def convert_list_to_transform(transform_flat: List[float]) -> 'carla.Transform':
     return carla.Transform(
         carla.Location(x=transform_flat[0], y=transform_flat[1], z=transform_flat[2]),
         carla.Rotation(pitch=transform_flat[3],

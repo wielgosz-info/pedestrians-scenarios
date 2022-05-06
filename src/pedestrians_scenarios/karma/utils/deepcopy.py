@@ -9,7 +9,7 @@ except ModuleNotFoundError:
     warnings.warn("Using mock carla.", ImportWarning)
 
 
-def deepcopy_location(v: carla.Location) -> carla.Location:
+def deepcopy_location(v: 'carla.Location') -> 'carla.Location':
     return carla.Location(
         x=v.x,
         y=v.y,
@@ -17,7 +17,7 @@ def deepcopy_location(v: carla.Location) -> carla.Location:
     )
 
 
-def deepcopy_rotation(v: carla.Rotation) -> carla.Rotation:
+def deepcopy_rotation(v: 'carla.Rotation') -> 'carla.Rotation':
     return carla.Rotation(
         pitch=v.pitch,
         yaw=v.yaw,
@@ -25,7 +25,7 @@ def deepcopy_rotation(v: carla.Rotation) -> carla.Rotation:
     )
 
 
-def deepcopy_transform(v: carla.Transform) -> carla.Transform:
+def deepcopy_transform(v: 'carla.Transform') -> 'carla.Transform':
     return carla.Transform(
         location=deepcopy_location(v.location),
         rotation=deepcopy_rotation(v.rotation)
