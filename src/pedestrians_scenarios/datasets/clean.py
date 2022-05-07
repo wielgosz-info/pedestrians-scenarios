@@ -31,11 +31,17 @@ def add_cli_args(parser):
         help='Path to the YOLO root directory.',
         default='/outputs/YOLO_v3'
     )
+    parser.add_argument(
+        '--min_clip_length',
+        type=int,
+        help='Minimum length of the clip in frames.',
+        default=30
+    )
 
     return parser
 
 
-def command(dataset_dir, yolo_root, remove, **kwargs):
+def command(dataset_dir, yolo_root, remove, min_clip_length, **kwargs):
     """
     Command line interface for cleaning datasets.
 
@@ -55,7 +61,7 @@ def command(dataset_dir, yolo_root, remove, **kwargs):
     csv_path = os.path.join(dataset_dir, 'data.csv')
     video_path = os.path.join(dataset_dir, 'clips')
 
-    df = trim_useless_rows(csv_path, remove=remove)
+    df = trim_useless_rows(csv_path, remove=remove, min_clip_length=min_clip_length)
 
     # TODO: edit the actual video files and update frame indices in the CSV?
 
@@ -278,7 +284,7 @@ def has_pedestrian_in_frame(row):
     return has_pedestrian_in_frame
 
 
-def trim_useless_rows(csv_path, remove=False, df=None):
+def trim_useless_rows(csv_path, remove=False, df=None, min_clip_length=30):
     logger.info('Starting CSV rows trimming...')
 
     df = get_df(csv_path, df)
@@ -293,6 +299,10 @@ def trim_useless_rows(csv_path, remove=False, df=None):
     # get min/max frame number
     logger.info('Calculating min/max frame numbers...')
     grouped = df[has_pedestrian_in_frame_mask].groupby(by=['camera.recording']).aggregate({'frame.idx': ['min', 'max']})
+    
+    # only keep recordings with at least min_clip_length frames
+    lengths = grouped['frame.idx']['max'] - grouped['frame.idx']['min']
+    grouped = grouped[lengths >= min_clip_length]
 
     # only leave rows between min and max frame number
     # which is not necessary the same as has_pedestrian_in_frame == True
