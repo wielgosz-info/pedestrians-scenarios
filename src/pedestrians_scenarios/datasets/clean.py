@@ -202,52 +202,7 @@ def pedestrian_detection_in_video(video_path, files_list=None, remove=False, yol
 
             pbar.update(1)
 
-            # create a 4D blob from a frame.
-            # this version of net/opencv does not work with batch processing
-            blob = cv2.dnn.blobFromImage(
-                frame, scale, (416, 416), (0, 0, 0), True, crop=False)
-
-            # set input blob for the network
-            net.setInput(blob)
-
-            # run inference through the network
-            # and gather predictions from output layers
-            outs = net.forward(net.getUnconnectedOutLayersNames())
-
-            # initialization
-            class_ids = []
-            confidences = []
-            boxes = []
-            conf_threshold = 0.5
-            nms_threshold = 0.4
-
-            # for each detection from each output layer
-            # get the confidence, class id, bounding box params
-            # and ignore weak detections (confidence < 0.5)
-            for out in outs:
-                for detection in out:
-                    scores = detection[5:]
-                    class_id = np.argmax(scores)
-                    confidence = scores[class_id]
-                    if confidence > 0.5:
-                        center_x = int(detection[0] * frame.shape[1])
-                        center_y = int(detection[1] * frame.shape[0])
-                        w = int(detection[2] * frame.shape[1])
-                        h = int(detection[3] * frame.shape[0])
-                        x = center_x - w / 2
-                        y = center_y - h / 2
-                        class_ids.append(class_id)
-                        confidences.append(float(confidence))
-                        boxes.append([x, y, w, h])
-
-            indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, nms_threshold)
-
-            for i in indices:
-                if not type(i) == np.int32:
-                    i = i[0]
-                if class_ids[i] == 0:
-                    is_pedestrian_in_video = True
-                    break
+            is_pedestrian_in_video = process_frame(scale, net, frame)
 
             if is_pedestrian_in_video:
                 break
@@ -273,6 +228,54 @@ def pedestrian_detection_in_video(video_path, files_list=None, remove=False, yol
     logger.info('Finished pedestrian detection.')
 
     return files_to_be_removed
+
+def process_frame(scale, net, frame):
+    # create a 4D blob from a frame.
+    blob = cv2.dnn.blobFromImage(frame, scale, (416, 416), (0, 0, 0), True, crop=False)
+
+    # set input blob for the network
+    net.setInput(blob)
+
+    # run inference through the network
+    # and gather predictions from output layers
+    outs = net.forward(net.getUnconnectedOutLayersNames())
+
+    # initialization
+    class_ids = []
+    confidences = []
+    boxes = []
+    conf_threshold = 0.5
+    nms_threshold = 0.4
+
+    # for each detection from each output layer
+    # get the confidence, class id, bounding box params
+    # and ignore weak detections (confidence < 0.5)
+    for out in outs:
+        for detection in out:
+            scores = detection[5:]
+            class_id = np.argmax(scores)
+            confidence = scores[class_id]
+            if confidence > 0.5:
+                center_x = int(detection[0] * frame.shape[1])
+                center_y = int(detection[1] * frame.shape[0])
+                w = int(detection[2] * frame.shape[1])
+                h = int(detection[3] * frame.shape[0])
+                x = center_x - w / 2
+                y = center_y - h / 2
+                class_ids.append(class_id)
+                confidences.append(float(confidence))
+                boxes.append([x, y, w, h])
+
+    indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, nms_threshold)
+
+    for i in indices:
+        if not type(i) == np.int32:
+            i = i[0]
+        if class_ids[i] == 0:
+            is_pedestrian_in_video = True
+            break
+
+    return is_pedestrian_in_video
 
 
 def has_pedestrian_in_frame(row):
