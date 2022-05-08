@@ -144,15 +144,6 @@ def get_file_lists(video_path, df, removed_from_dir_dry=None):
     return files_in_dir, files_in_csv, common_files, remove_from_dir, remove_from_csv
 
 
-def get_output_layers(net):
-    layer_names = net.getLayerNames()
-    output_layers = [
-        layer_names[(i if type(i) == np.int32 else i[0]) - 1]
-        for i in net.getUnconnectedOutLayers()
-    ]
-    return output_layers
-
-
 def pedestrian_detection_in_video(video_path, files_list=None, remove=False, yolo_root='/outputs/YOLO_v3'):
     """
     Checks if there is a pedestrian visible in the video in at least one frame.
@@ -196,60 +187,75 @@ def pedestrian_detection_in_video(video_path, files_list=None, remove=False, yol
         # read video
         video_file = os.path.join(video_path, file_name)
         video = cv2.VideoCapture(video_file)
-        # read first frame
-        success, frame = video.read()
-        # quit if unable to read the video file
-        if not success:
-            logger.info('Failed to read video')
-            sys.exit(1)
-
-        # create a 4D blob from a frame.
-        blob = cv2.dnn.blobFromImage(
-            frame, scale, (416, 416), (0, 0, 0), True, crop=False)
-
-        # set input blob for the network
-        net.setInput(blob)
-
-        # run inference through the network
-        # and gather predictions from output layers
-        outs = net.forward(get_output_layers(net))
-
-        # initialization
-        class_ids = []
-        confidences = []
-        boxes = []
-        conf_threshold = 0.5
-        nms_threshold = 0.4
-
-        # for each detection from each output layer
-        # get the confidence, class id, bounding box params
-        # and ignore weak detections (confidence < 0.5)
-        for out in outs:
-            for detection in out:
-                scores = detection[5:]
-                class_id = np.argmax(scores)
-                confidence = scores[class_id]
-                if confidence > 0.5:
-                    center_x = int(detection[0] * frame.shape[1])
-                    center_y = int(detection[1] * frame.shape[0])
-                    w = int(detection[2] * frame.shape[1])
-                    h = int(detection[3] * frame.shape[0])
-                    x = center_x - w / 2
-                    y = center_y - h / 2
-                    class_ids.append(class_id)
-                    confidences.append(float(confidence))
-                    boxes.append([x, y, w, h])
-
-        indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, nms_threshold)
 
         is_pedestrian_in_video = False
+        frame_count = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        for i in indices:
-            if not type(i) == np.int32:
-                i = i[0]
-            if class_ids[i] == 0:
-                is_pedestrian_in_video = True
+        pbar = tqdm(total=frame_count, desc='Processing video: {}'.format(file_name), leave=False)
+
+        while video.isOpened():
+            # read first frame
+            success, frame = video.read()
+            # quit if unable to read the video file
+            if not success:
                 break
+
+            pbar.update(1)
+
+            # create a 4D blob from a frame.
+            # this version of net/opencv does not work with batch processing
+            blob = cv2.dnn.blobFromImage(
+                frame, scale, (416, 416), (0, 0, 0), True, crop=False)
+
+            # set input blob for the network
+            net.setInput(blob)
+
+            # run inference through the network
+            # and gather predictions from output layers
+            outs = net.forward(net.getUnconnectedOutLayersNames())
+
+            # initialization
+            class_ids = []
+            confidences = []
+            boxes = []
+            conf_threshold = 0.5
+            nms_threshold = 0.4
+
+            # for each detection from each output layer
+            # get the confidence, class id, bounding box params
+            # and ignore weak detections (confidence < 0.5)
+            for out in outs:
+                for detection in out:
+                    scores = detection[5:]
+                    class_id = np.argmax(scores)
+                    confidence = scores[class_id]
+                    if confidence > 0.5:
+                        center_x = int(detection[0] * frame.shape[1])
+                        center_y = int(detection[1] * frame.shape[0])
+                        w = int(detection[2] * frame.shape[1])
+                        h = int(detection[3] * frame.shape[0])
+                        x = center_x - w / 2
+                        y = center_y - h / 2
+                        class_ids.append(class_id)
+                        confidences.append(float(confidence))
+                        boxes.append([x, y, w, h])
+
+            indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, nms_threshold)
+
+            for i in indices:
+                if not type(i) == np.int32:
+                    i = i[0]
+                if class_ids[i] == 0:
+                    is_pedestrian_in_video = True
+                    break
+
+            if is_pedestrian_in_video:
+                break
+
+        if video.isOpened():
+            video.release()
+
+        pbar.close()
 
         if not is_pedestrian_in_video:
             files_to_be_removed.append(file_name)
@@ -299,15 +305,20 @@ def trim_useless_rows(csv_path, remove=False, df=None, min_clip_length=30):
     # get min/max frame number
     logger.info('Calculating min/max frame numbers...')
     grouped = df[has_pedestrian_in_frame_mask].groupby(by=['camera.recording']).aggregate({'frame.idx': ['min', 'max']})
-    
+    grouped.columns = grouped.columns.to_flat_index().map(lambda x: '_'.join(x))
+
     # only keep recordings with at least min_clip_length frames
-    lengths = grouped['frame.idx']['max'] - grouped['frame.idx']['min']
+    lengths = grouped['frame.idx_max'] - grouped['frame.idx_min']
     grouped = grouped[lengths >= min_clip_length]
 
     # only leave rows between min and max frame number
     # which is not necessary the same as has_pedestrian_in_frame == True
     logger.info('Calculating dataframe mask...')
-    frame_no_mask = df.apply(lambda row: row['camera.recording'] in grouped.index and row['frame.idx'] >= grouped.loc[row['camera.recording'], ('frame.idx','min')] and row['frame.idx'] <= grouped.loc[row['camera.recording'], ('frame.idx','max')], axis=1)
+
+    df_min_max = df.join(grouped, on='camera.recording', how='left')
+    frame_no_mask_min = df_min_max['frame.idx'] >= df_min_max['frame.idx_min']
+    frame_no_mask_max = df_min_max['frame.idx'] <= df_min_max['frame.idx_max']
+    frame_no_mask = frame_no_mask_min & frame_no_mask_max
 
     # filter the dataframe
     logger.info('Filtering dataframe...')
