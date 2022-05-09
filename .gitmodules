@@ -2,3 +2,6 @@
 	path = third_party/scenario_runner
 	url = https://github.com/carla-simulator/scenario_runner.git
 	ignore = dirty
+[submodule "third_party/carla_roach"]
+	path = third_party/carla_roach
+	url = https://github.com/maciekwielgosz/carla-roach.git
