@@ -8,6 +8,7 @@ ENV PACKAGE=pedestrians-scenarios
 RUN /venv/bin/python -m pip install --no-cache-dir \
     av==8.0.3 \
     cameratransform==1.2 \
+    dictor \
     ephem==4.1.3 \
     gym==0.23.1 \
     h5py==3.6.0 \
@@ -22,7 +23,9 @@ RUN /venv/bin/python -m pip install --no-cache-dir \
     pims==0.5 \
     psutil==5.9.0 \
     py-trees==0.8.3 \
+    pygame \
     pyyaml==6.0 \
+    requests \
     scikit-image==0.18.3 \
     scipy==1.7.2 \
     Shapely==1.7.1 \
@@ -45,3 +48,4 @@ ENV SCENARIO_RUNNER_ROOT=/app/src/pedestrians_scenarios/scenarios
 # add carla roach
 RUN ln -s /app/third_party/carla_roach/carla_gym /venv/lib/python3.8/site-packages/carla_gym
 RUN ln -s /app/third_party/carla_roach/agents /venv/lib/python3.8/site-packages/roach_agents
+RUN ln -s /app/third_party/leaderboard/leaderboard/ /venv/lib/python3.8/site-packages/leaderboard 
