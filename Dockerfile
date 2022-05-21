@@ -32,6 +32,7 @@ RUN /venv/bin/python -m pip install --no-cache-dir \
     simple-watchdog-timer==0.1.1 \
     six==1.16.0 \
     tabulate==0.8.9 \
+    torchvision \
     tqdm==4.62.3 \
     wandb==0.12.16 \
     xmlschema==1.0.18

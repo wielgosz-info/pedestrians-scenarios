@@ -1,13 +1,20 @@
+import copy
 import logging
+# from turtle import speed
 import numpy as np
 from roach_agents.cilrs.cilrs_agent import CilrsAgent
-from srunner.autoagents.autonomous_agent import AutonomousAgent
+# from srunner.autoagents.autonomous_agent import AutonomousAgent
+from leaderboard.autoagents.autonomous_agent import AutonomousAgent, Track
+
 
 from srunner.tests.carla_mocks import carla
 import carla_gym.utils.transforms as trans_utils
 import carla_gym.core.task_actor.common.navigation.route_manipulation as gps_util
 from carla_gym.core.task_actor.common.navigation.map_utils import RoadOption
 
+
+def get_entry_point():
+    return 'CarlaRoachAgent'
 
 
 class CarlaRoachAgent(CilrsAgent, AutonomousAgent):
@@ -19,7 +26,7 @@ class CarlaRoachAgent(CilrsAgent, AutonomousAgent):
         self._render_dict = None
         self._global_plan_gps = None
         AutonomousAgent.__init__(self, path_to_conf_file)
-        
+   
     def sensors(self):
         """
         Define the sensor suite required by the agent
@@ -43,20 +50,22 @@ class CarlaRoachAgent(CilrsAgent, AutonomousAgent):
             {'type': 'sensor.camera.rgb', 'x': -1.5, 'y': 0.0, 'z': 2.0, 'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0,
              'width': 900, 'height': 256, 'fov': 100, 'id': 'central_rgb'},
             {'type': 'sensor.other.gnss', 'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'gnss'},
-            {
-                'type': 'sensor.other.imu', 
-                'noise_accel_stddev_x': 0.001, 
-                'noise_accel_stddev_y': 0.001,
-                'noise_accel_stddev_z': 0.015,
-                'noise_gyro_stddev_x': 0.001,
-                'noise_gyro_stddev_y': 0.001,
-                'noise_gyro_stddev_z': 0.001,
-                'id': 'imu'
-            },
-            {'type': 'sensor.other.speedometer', 'reading_frequency': 25, id: 'forward_speed',}
+            {'type': 'sensor.other.imu', 'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'imu'},
+            {'type': 'sensor.speedometer', 'reading_frequency': 25, 'id': 'forward_speed',}
 
         ]
         return sensors
+
+    def _preprocess_rgb(self, carla_image):
+        # np_img = np.frombuffer(carla_image.raw_data, dtype=np.dtype("uint8"))
+
+        np_img = copy.deepcopy(carla_image)
+        # print(np_img.shape)
+
+        # np_img = np.reshape(np_img, (carla_image.height, carla_image.width, 4))
+        np_img = np_img[:, :, :3]
+        np_img = np_img[:, :, ::-1]
+        return np_img
 
     def set_global_plan(self, global_plan_gps, global_plan_world_coord):
         self._global_plan_gps = global_plan_gps
@@ -101,9 +110,14 @@ class CarlaRoachAgent(CilrsAgent, AutonomousAgent):
             'target_gps': np.array(gps_point, dtype=np.float32),
             'command': np.array([road_option.value], dtype=np.int8)
             }
+
+        speed_data = {
+            'forward_speed': np.array([ input_data['forward_speed'][1]['speed'] ], dtype=np.float32)
+        }
     
         converted_data = {
-            'central_rgb':  {'frame': input_data['central_rgb'][0], 'data': input_data['central_rgb'][1]},
-            'gnss': gnss_data
+            'central_rgb':  {'frame': input_data['central_rgb'][0], 'data': self._preprocess_rgb(input_data['central_rgb'][1])},
+            'gnss': gnss_data,
+            'speed': speed_data
         }
         return super().run_step(converted_data, timestamp)
