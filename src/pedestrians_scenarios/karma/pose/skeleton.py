@@ -51,7 +51,7 @@ class Skeleton(Enum):
         col = [edge[1].value for edge in cls.get_edges()] + \
             [edge[0].value for edge in cls.get_edges()]
         data = np.ones(len(row))
-        sparse_mtx = coo_matrix((data, (row, col)), shape=(26, 26))
+        sparse_mtx = coo_matrix((data, (row, col)), shape=(len(cls), len(cls)))
         edge_index, edge_attrs = torch_geometric.utils.from_scipy_sparse_matrix(
             sparse_mtx)
         cls._edge_index = edge_index
@@ -122,6 +122,7 @@ class CARLA_SKELETON(Skeleton):
     @classmethod
     def get_edges(cls) -> List[Tuple['CARLA_SKELETON', 'CARLA_SKELETON']]:
         return [
+            [CARLA_SKELETON.crl_root, CARLA_SKELETON.crl_hips__C],
             [CARLA_SKELETON.crl_hips__C, CARLA_SKELETON.crl_spine__C],
             [CARLA_SKELETON.crl_spine__C, CARLA_SKELETON.crl_spine01__C],
             [CARLA_SKELETON.crl_spine01__C, CARLA_SKELETON.crl_shoulder__L],
