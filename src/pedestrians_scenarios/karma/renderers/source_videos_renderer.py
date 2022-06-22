@@ -61,6 +61,7 @@ class SourceVideosRenderer(Renderer):
 
         for clip_idx in range(rendered_videos):
             video = self.render_clip(
+                meta['set_name'][clip_idx] if 'set_name' in meta else '',
                 meta['video_id'][clip_idx],
                 meta['pedestrian_id'][clip_idx],
                 meta['clip_id'][clip_idx],
@@ -75,7 +76,7 @@ class SourceVideosRenderer(Renderer):
             )
             yield video
 
-    def render_clip(self, video_id, pedestrian_id, clip_id, start_frame, end_frame, bboxes=None, skeletons=None, labels=None):
+    def render_clip(self, set_name, video_id, pedestrian_id, clip_id, start_frame, end_frame, bboxes=None, skeletons=None, labels=None):
         (canvas_width, canvas_height) = self._image_size
         half_width = int(math.floor(canvas_width / 2))
         half_height = int(math.floor(canvas_height / 2))
@@ -83,7 +84,7 @@ class SourceVideosRenderer(Renderer):
                           canvas_width, 3), dtype=np.uint8)
 
         paths = glob.glob(os.path.join(
-            self.__data_dir, '{}.*'.format(os.path.splitext(video_id)[0])))
+            self.__data_dir, set_name, '{}.*'.format(os.path.splitext(video_id)[0])))
         try:
             assert len(paths) == 1
             with pims.PyAVReaderIndexed(paths[0]) as video:
