@@ -12,6 +12,7 @@ from carla_gym.core.task_actor.common.navigation.map_utils import RoadOption
 
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from carla_gym.core.task_actor.common.task_vehicle import TaskVehicle
+from carla_gym.core.obs_manager.birdview.chauffeurnet import ObsManager
 
 def get_entry_point():
     return 'LeaderboardPPOAgent'
@@ -27,6 +28,7 @@ class LeaderboardPPOAgent(RlBirdviewAgent, AutonomousAgent):
         self._idx = -1
         self._agent = None
         self.ego_vehicle = None
+        self.obs_manager = ObsManager(self._obs_configs['birdview'])
    
     def sensors(self):
         sensors = [
