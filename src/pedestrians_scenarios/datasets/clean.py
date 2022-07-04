@@ -2,6 +2,7 @@ import ast
 import logging
 import os
 import sys
+from unittest import skip
 import cv2
 import numpy as np
 import urllib.request
@@ -37,11 +38,17 @@ def add_cli_args(parser):
         help='Minimum length of the clip in frames.',
         default=30
     )
+    parser.add_argument(
+        '--detection_failure_threshold',
+        type=int,
+        help='Number of consecutive frames without YOLO-detected  pedestrians to remove the frames.',
+        default=3
+    )
 
     return parser
 
 
-def command(dataset_dir, yolo_root, remove, min_clip_length, **kwargs):
+def command(dataset_dir, yolo_root, remove, min_clip_length, detection_failure_threshold, **kwargs):
     """
     Command line interface for cleaning datasets.
 
@@ -61,13 +68,11 @@ def command(dataset_dir, yolo_root, remove, min_clip_length, **kwargs):
     csv_path = os.path.join(dataset_dir, 'data.csv')
     video_path = os.path.join(dataset_dir, 'clips')
 
-    df = trim_useless_rows(csv_path, remove=remove, min_clip_length=min_clip_length)
+    df = remove_rows_with_bbox_outside_frame(csv_path, remove=remove, min_clip_length=min_clip_length)
+    df = sync_csv_and_videos(csv_path, video_path, remove=remove, df=df)
 
-    # TODO: edit the actual video files and update frame indices in the CSV?
-
-    file_names_common, df = sync_csv_and_videos(csv_path, video_path, remove=remove, df=df)
-    file_names_no_pedestrians = pedestrian_detection_in_video(
-        video_path, file_names_common, remove=remove, yolo_root=yolo_root)
+    file_names_no_pedestrians = remove_rows_with_no_pedestrians_detected(
+        csv_path, video_path, remove=remove, yolo_root=yolo_root, df=df, detection_failure_threshold=detection_failure_threshold)
     sync_csv_and_videos(csv_path, video_path, file_names_no_pedestrians, remove=remove, df=df)
 
 
@@ -118,12 +123,11 @@ def sync_csv_and_videos(csv_path, video_path, removed_from_dir_dry=None, remove=
                 os.remove(os.path.join(video_path, element))
 
         if len(remove_from_csv):
-            logger.info('Saving updated CSV.')
-            df.to_csv(csv_path, index=False)
+            save_df(csv_path, df)
 
     logger.info('CSV and video files synchronization done.')
 
-    return common_files, df
+    return df
 
 
 def get_file_lists(video_path, df, removed_from_dir_dry=None):
@@ -144,7 +148,7 @@ def get_file_lists(video_path, df, removed_from_dir_dry=None):
     return files_in_dir, files_in_csv, common_files, remove_from_dir, remove_from_csv
 
 
-def pedestrian_detection_in_video(video_path, files_list=None, remove=False, yolo_root='/outputs/YOLO_v3'):
+def remove_rows_with_no_pedestrians_detected(csv_path, video_path, remove=False, yolo_root='/outputs/YOLO_v3', df=None, detection_failure_threshold=3):
     """
     Checks if there is a pedestrian visible in the video in at least one frame.
     Taken from:
@@ -152,10 +156,7 @@ def pedestrian_detection_in_video(video_path, files_list=None, remove=False, yol
     """
     logger.info('Starting pedestrian detection in videos.')
 
-    if files_list is None:
-        file_names_from_folder = os.listdir(video_path)
-    else:
-        file_names_from_folder = files_list
+    df = get_df(csv_path, df)
 
     scale = 0.00392
     yolov3_cfg = os.path.join(yolo_root, 'yolov3.cfg')
@@ -180,18 +181,22 @@ def pedestrian_detection_in_video(video_path, files_list=None, remove=False, yol
     # read pre-trained model and config file
     net = cv2.dnn.readNet(yolov3_weights, yolov3_cfg)
 
-    # list of files to be removed
-    files_to_be_removed = []
+    grouped = df.groupby('camera.recording')
+    mask = df['frame.idx'] > -1  # all true
 
-    for file_name in tqdm(file_names_from_folder, desc='Detecting pedestrians'):
+    for name, group in tqdm(grouped, desc='Detecting pedestrians'):
         # read video
+        file_name = name.replace(os.path.split(video_path)[-1] + os.path.sep, '')
         video_file = os.path.join(video_path, file_name)
         video = cv2.VideoCapture(video_file)
 
-        is_pedestrian_in_video = False
         frame_count = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+        frame_idx = 0
+        skipped = 0
+        consecutive_frames_without_pedestrian = 0
 
-        pbar = tqdm(total=frame_count, desc='Processing video: {}'.format(file_name), leave=False)
+        pbar = tqdm(total=frame_count, desc='{}'.format(file_name), leave=False, unit='f')
+        pbar.set_postfix(skipped=0)
 
         while video.isOpened():
             # read first frame
@@ -200,34 +205,37 @@ def pedestrian_detection_in_video(video_path, files_list=None, remove=False, yol
             if not success:
                 break
 
+            if frame_idx in group['frame.idx'].values:
+                is_pedestrian_in_frame = process_frame(scale, net, frame)
+                if not is_pedestrian_in_frame:
+                    consecutive_frames_without_pedestrian += 1
+                else:
+                    consecutive_frames_without_pedestrian = 0
+
+                if consecutive_frames_without_pedestrian >= detection_failure_threshold:
+                    mask = mask & (((df['frame.idx'] > frame_idx) | (df['frame.idx'] <= frame_idx - detection_failure_threshold)) | (df['camera.recording'] != name))
+            else:
+                skipped += 1
+                consecutive_frames_without_pedestrian += 1
+                pbar.set_postfix(skipped=skipped)
+
+            frame_idx += 1
             pbar.update(1)
-
-            is_pedestrian_in_video = process_frame(scale, net, frame)
-
-            if is_pedestrian_in_video:
-                break
 
         if video.isOpened():
             video.release()
 
         pbar.close()
 
-        if not is_pedestrian_in_video:
-            files_to_be_removed.append(file_name)
+    removed_frames = len(df[~mask])
+    df = df[mask]
 
-    print('Number of files to be removed after detection (no pedestrians): {}'.format(
-        len(files_to_be_removed)))
+    if remove and removed_frames > 0:
+        save_df(csv_path, df)
 
-    if len(files_to_be_removed):
-        logger.debug('Will remove:\n' + ('\n'.join(files_to_be_removed)))
+    logger.info(f'Finished pedestrian detection, {removed_frames} rows removed.')
 
-    if remove:
-        for file_name in tqdm(files_to_be_removed, desc='Removing the files'):
-            os.remove(os.path.join(video_path, file_name))
-
-    logger.info('Finished pedestrian detection.')
-
-    return files_to_be_removed
+    return df
 
 def process_frame(scale, net, frame):
     # create a 4D blob from a frame.
@@ -268,6 +276,7 @@ def process_frame(scale, net, frame):
 
     indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, nms_threshold)
 
+    is_pedestrian_in_video = False
     for i in indices:
         if not type(i) == np.int32:
             i = i[0]
@@ -293,7 +302,7 @@ def has_pedestrian_in_frame(row):
     return has_pedestrian_in_frame
 
 
-def trim_useless_rows(csv_path, remove=False, df=None, min_clip_length=30):
+def remove_rows_with_bbox_outside_frame(csv_path, remove=False, df=None, min_clip_length=30):
     logger.info('Starting CSV rows trimming...')
 
     df = get_df(csv_path, df)
@@ -323,16 +332,17 @@ def trim_useless_rows(csv_path, remove=False, df=None, min_clip_length=30):
     frame_no_mask_max = df_min_max['frame.idx'] <= df_min_max['frame.idx_max']
     frame_no_mask = frame_no_mask_min & frame_no_mask_max
 
+    final_mask = has_pedestrian_in_frame_mask & frame_no_mask
+
     # filter the dataframe
     logger.info('Filtering dataframe...')
-    df = df[frame_no_mask]
+    df = df[final_mask]
 
     new_size = len(df)
     print('Number of rows after trimming: {} (removed {}%).'.format(new_size, round((original_size - new_size) / original_size * 100, 2)))
 
     if remove and original_size != new_size:
-        logger.info('Saving updated CSV.')
-        df.to_csv(csv_path, index=False)
+        save_df(csv_path, df)
 
     logger.info('Trimming done.')
 
@@ -347,4 +357,7 @@ def get_df(csv_path, df):
         logger.info('Using existing dataframe.')
     return df
 
-    
+def save_df(csv_path, df):
+    logger.info('Saving updated CSV.')
+    df.to_csv(csv_path+'.tmp', index=False)
+    os.rename(csv_path+'.tmp', csv_path)
