@@ -39,6 +39,10 @@ class Skeleton(Enum):
         raise NotImplementedError()
 
     @classmethod
+    def get_flip_mask(cls) -> Tuple[int]:
+        raise NotImplementedError()
+
+    @classmethod
     def get_edge_index(cls) -> 'torch.Tensor':
         """
         Helper function to get the edge index of the skeleton in the torch geometric format.
@@ -160,3 +164,34 @@ class CARLA_SKELETON(Skeleton):
     @classmethod
     def get_hips_point(cls) -> 'CARLA_SKELETON':
         return CARLA_SKELETON.crl_hips__C
+
+    @classmethod
+    def get_flip_mask(cls) -> Tuple[int]:
+        return (
+            CARLA_SKELETON.crl_root.value,
+            CARLA_SKELETON.crl_hips__C.value,
+            CARLA_SKELETON.crl_spine__C.value,
+            CARLA_SKELETON.crl_spine01__C.value,
+            CARLA_SKELETON.crl_shoulder__R.value,
+            CARLA_SKELETON.crl_arm__R.value,
+            CARLA_SKELETON.crl_foreArm__R.value,
+            CARLA_SKELETON.crl_hand__R.value,
+            CARLA_SKELETON.crl_neck__C.value,
+            CARLA_SKELETON.crl_Head__C.value,
+            CARLA_SKELETON.crl_eye__R.value,
+            CARLA_SKELETON.crl_eye__L.value,
+            CARLA_SKELETON.crl_shoulder__L.value,
+            CARLA_SKELETON.crl_arm__L.value,
+            CARLA_SKELETON.crl_foreArm__L.value,
+            CARLA_SKELETON.crl_hand__L.value,
+            CARLA_SKELETON.crl_thigh__L.value,
+            CARLA_SKELETON.crl_leg__L.value,
+            CARLA_SKELETON.crl_foot__L.value,
+            CARLA_SKELETON.crl_toe__L.value,
+            CARLA_SKELETON.crl_toeEnd__L.value,
+            CARLA_SKELETON.crl_thigh__R.value,
+            CARLA_SKELETON.crl_leg__R.value,
+            CARLA_SKELETON.crl_foot__R.value,
+            CARLA_SKELETON.crl_toe__R.value,
+            CARLA_SKELETON.crl_toeEnd__R.value,
+        )
