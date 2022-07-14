@@ -84,7 +84,8 @@ class PointsRenderer(Renderer):
         draw = ImageDraw.Draw(img, 'RGBA' if has_alpha else 'RGB')
 
         if color_values is None:
-            color_values = list(skeleton.get_colors().values())
+            skeleton_colors = skeleton.get_colors()
+            color_values = [skeleton_colors[k] for k in skeleton]  # ensure colors are in the same order as joints
 
         # if we know that skeleton has root point, we can draw it
         root_point = skeleton.get_root_point() if skeleton is not None else None
