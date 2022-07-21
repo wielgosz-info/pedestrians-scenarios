@@ -72,7 +72,11 @@ class SourceVideosRenderer(Renderer):
                     'keypoints': sk['keypoints'][clip_idx],
                     'color': sk['color'],
                     'type': sk['type']
-                } for sk in meta['skeletons']] if 'skeletons' in meta else None
+                } for sk in meta['skeletons']] if 'skeletons' in meta else None,
+                {
+                    k: v[clip_idx]
+                    for k, v in meta['labels'].items()
+                } if 'labels' in meta else None
             )
             yield video
 
@@ -111,7 +115,7 @@ class SourceVideosRenderer(Renderer):
                                           'type': sk['type']
                                       } for sk in skeletons] if skeletons is not None and self.overlay_skeletons else None,
                                       bbox=bboxes[idx] if bboxes is not None and self.overlay_bboxes else None,
-                                      labels={k: v[idx] for k, v in labels.items(
+                                      labels={k: (v if isinstance(v, str) else v[idx]) for k, v in labels.items(
                                       )} if labels is not None and self.overlay_labels else None,
                                       )
         except AssertionError:
