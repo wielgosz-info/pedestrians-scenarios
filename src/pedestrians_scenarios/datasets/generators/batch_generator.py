@@ -1,13 +1,16 @@
+import glob
 import logging
 import multiprocessing as mp
 import os
 import time
-from typing import Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Tuple
 from uuid import uuid4
 
+from PIL import Image
 import carla
 import numpy as np
 import pandas as pd
+from pedestrians_scenarios.datasets.clean import has_pedestrian_in_frame
 from pedestrians_scenarios.karma.cameras import (CamerasManager,
                                                  FramesMergingMathod)
 from pedestrians_scenarios.karma.karma import Karma, KarmaStage
@@ -18,6 +21,7 @@ from pedestrians_scenarios.karma.pose.pose_dict import (
 from pedestrians_scenarios.karma.pose.projection import project_pose
 from pedestrians_scenarios.karma.utils.conversions import (
     convert_transform_to_list, convert_vector3d_to_list)
+from pedestrians_scenarios.karma.utils.deepcopy import deepcopy_transform
 from pedestrians_scenarios.karma.walker import Walker
 from srunner.scenariomanager.actorcontrols.pedestrian_control import \
     PedestrianControl
@@ -42,7 +46,7 @@ class BatchGenerator(mp.Process):
                  batch_idx: int = 0,  # index of the batch
                  # how many videos to generate in a single world at the same time (the world is not reset between clips and the created only at the beginning of the batch)
                  batch_size: int = 1,
-                 clip_length_in_frames: int = 600,
+                 clip_length_in_frames: int = 900,
                  # there is problem with kids in real datasets, there are only few of them,
                  # in our case have equal number of adults and children which is less realistic but more useful
                  pedestrian_distributions: Iterable[Tuple[PedestrianProfile, float]] = (
@@ -57,7 +61,7 @@ class BatchGenerator(mp.Process):
                      StandardDistribution(1.0, 0.25)
                  ),),
                  camera_fov: float = 90.0,
-                 camera_image_size: Tuple[int, int] = (800, 600),
+                 camera_image_size: Tuple[int, int] = (1600, 600),
                  waypoint_jitter_scale: float = 1.0,
                  **kwargs) -> None:
         super().__init__(
@@ -179,6 +183,24 @@ class BatchGenerator(mp.Process):
                     f'Failed to create pedestrians for clip {clip_idx} in batch {self._batch_idx}.')
             pedestrians.append(in_clip)
         return pedestrians
+
+    def _rotate_pedestrian_towards_location(self, pedestrian: Walker, location: carla.Location) -> None:
+        """
+        Helper method in setting up a single pedestrian.
+        It does not tick the world.
+        """
+
+        direction_unit = (location -
+                          pedestrian.get_transform().location)
+        direction_unit.z = 0  # ignore height
+        direction_unit = direction_unit.make_unit_vector()
+
+        # shortcut, since we're ignoring elevation
+        # compute how we need to rotate the pedestrian to face the waypoint
+        pedestrian_transform = deepcopy_transform(pedestrian.get_transform())
+        delta = np.rad2deg(np.arctan2(direction_unit.y, direction_unit.x))
+        pedestrian_transform.rotation.yaw = pedestrian_transform.rotation.yaw + delta
+        pedestrian.set_transform(pedestrian_transform)
 
     def get_camera_distances(self) -> Iterable[Iterable[float]]:
         """
@@ -350,10 +372,11 @@ class BatchGenerator(mp.Process):
 
         # start cameras
         recordings = []
-        for clip_idx, managers in enumerate(camera_managers):
+        for managers in camera_managers:
+            clip_id = str(uuid4())
             clip_recordings = []
             for manager_idx, manager in enumerate(managers):
-                recording_name = f'{self._batch_idx}-{clip_idx}-{manager_idx}'
+                recording_name = f'{clip_id}-{manager_idx}'
                 clip_recordings.append(recording_name)
                 manager.start_recording(recording_name)
             recordings.append(clip_recordings)
@@ -431,16 +454,23 @@ class BatchGenerator(mp.Process):
         batch_data = []
         clips_count = 0
         for clip_idx in range(self._batch_size):
+            clip_managers: Iterable[CamerasManager] = camera_managers[clip_idx]
+
             if not sum(len(c) for c in captured_data[clip_idx]):
                 logging.getLogger(__name__).info(
                     f'No data was captured for clip {clip_idx}, skipping.')
+                for manager_idx, manager in enumerate(clip_managers):
+                    self.remove_clip_files(manager.outputs_dir,
+                                           recordings[clip_idx][manager_idx])
                 continue
             if not reached_first_waypoint[clip_idx]:
                 logging.getLogger(__name__).info(
                     f'At least one of the pedestrians in {clip_idx} did not reach first waypoint, skipping.')
+                for manager_idx, manager in enumerate(clip_managers):
+                    self.remove_clip_files(manager.outputs_dir,
+                                           recordings[clip_idx][manager_idx])
                 continue
 
-            clip_managers: Iterable[CamerasManager] = camera_managers[clip_idx]
             clip_models: Iterable[str] = models[clip_idx]
             clip_profiles: Iterable[PedestrianProfile] = profiles[clip_idx]
             clip_spawn_points: Iterable[carla.Transform] = spawn_points[clip_idx]
@@ -453,14 +483,13 @@ class BatchGenerator(mp.Process):
                 for data in clip_captured_data
             ]
 
-            clip_id = str(uuid4())  # make it unique in dataset
             clip_data = []
 
             for manager_idx, manager in enumerate(clip_managers):
-                recording: str = recordings[clip_idx][manager_idx] if len(
+                clip_id: str = recordings[clip_idx][manager_idx] if len(
                     recordings[clip_idx]) else None
 
-                if recording is None:
+                if clip_id is None:
                     logging.getLogger(__name__).info(
                         f'No recording was created for clip {clip_idx} camera {manager_idx}, skipping.')
                     continue
@@ -468,17 +497,29 @@ class BatchGenerator(mp.Process):
                 clip_recorded_frames: Iterable[int] = sorted(
                     recorded_frames[clip_idx][manager_idx])
 
-                for camera_idx, camera in enumerate(manager.get_streamed_cameras()):
+                for camera_idx, synced_cameras in enumerate(manager.get_synchronized_cameras()):
+                    first_camera = synced_cameras[0]
+
+                    # get rgb camera
+                    rgb_camera = next(
+                        (x for x in synced_cameras if x.camera_type == 'rgb'), None)
+                    if rgb_camera is not None:
+                        rgb_camera_idx = synced_cameras.index(rgb_camera)
+
+                    # if semantic segmentation camera is present, we can use it to check if the pedestrians are visible
+                    semantic_camera = next(
+                        (x for x in synced_cameras if x.camera_type == 'semantic_segmentation'), None)
+                    if semantic_camera is not None:
+                        semantic_camera_idx = synced_cameras.index(semantic_camera)
+
                     # TODO: Some of the cameras can move (e.g. attached to a vehicle), so camera position should be per frame
                     # but for now we assume only FreeCameras that are static
-                    camera_transform = camera.get_transform()
+                    camera_transform = first_camera.get_transform()
 
                     min_frame = clip_recorded_frames[0]
                     max_frame = clip_recorded_frames[-1]
 
                     skip = 0
-                    # TODO: if projections are calculated, we can use them to check if the pedestrian is visible
-                    # in at least one frame for this camera; only add to batch_data if true
                     camera_data = []
                     has_pedestrian_data = False
                     for frame_idx, world_frame in enumerate(range(min_frame, max_frame + 1)):
@@ -506,7 +547,6 @@ class BatchGenerator(mp.Process):
                                 'id': clip_id,
                                 'world.map': map_name,
                                 'camera.idx': camera_idx,
-                                'camera.recording': f'clips/{recording}-{camera_idx}.mp4',
                                 'camera.transform': convert_transform_to_list(camera_transform),
                                 'camera.width': self._camera_image_size[0],
                                 'camera.height': self._camera_image_size[1],
@@ -517,6 +557,14 @@ class BatchGenerator(mp.Process):
                                 'pedestrian.spawn_point': convert_transform_to_list(spawn_point),
                                 'frame.idx': frame_idx - skip,
                             }
+
+                            if rgb_camera is not None:
+                                full_frame_data['camera.recording'] = f'clips/{clip_id}-{rgb_camera_idx}.mp4'
+
+                            if semantic_camera is not None:
+                                full_frame_data[
+                                    'camera.semantic_segmentation'] = f'clips/{clip_id}-{semantic_camera_idx}.apng'
+
                             full_frame_data.update(frame[pedestrian_idx])
 
                             if 'frame.pedestrian.pose.world' in frame[pedestrian_idx]:
@@ -524,23 +572,77 @@ class BatchGenerator(mp.Process):
                                     convert_list_to_pose_dict(
                                         frame[pedestrian_idx]['frame.pedestrian.pose.world']),
                                     camera_transform,
-                                    camera
+                                    first_camera
                                 )
                                 full_frame_data['frame.pedestrian.pose.camera'] = convert_pose_2d_dict_to_list(
                                     camera_pose)
-                                if not has_pedestrian_data:
-                                    has_pedestrian_data = np.all(np.isfinite(
-                                        full_frame_data['frame.pedestrian.pose.camera']))
+                                np_camera_pose = np.array(
+                                    full_frame_data['frame.pedestrian.pose.camera']).reshape((-1, 2))
+                                is_camera_pose_in_frame = np.all(
+                                    np.isfinite(np_camera_pose))
+                                if is_camera_pose_in_frame:
+                                    is_camera_pose_in_frame = np.any(
+                                        np_camera_pose[:, 0] >= 0) & np.any(
+                                        np_camera_pose[:, 1] >= 0) & np.any(
+                                        np_camera_pose[:, 0] <= self._camera_image_size[0]) & np.any(
+                                        np_camera_pose[:, 1] <= self._camera_image_size[1])
+                                full_frame_data['frame.pedestrian.pose.in_frame'] = bool(
+                                    is_camera_pose_in_frame)
+
+                                has_pedestrian_data = has_pedestrian_data or is_camera_pose_in_frame
 
                             del full_frame_data['frame.pedestrian.id']
 
                             camera_data.append(full_frame_data)
 
                     if has_pedestrian_data:
-                        clip_data.extend(camera_data)
+                        if semantic_camera is None:
+                            clip_data.extend(camera_data)
+                        elif self.has_pedestrian_in_semantic_segmentation(
+                            os.path.join(manager.outputs_dir,
+                                         '..',
+                                         camera_data[0]['camera.semantic_segmentation']),
+                            camera_data
+                        ):
+                            clip_data.extend(camera_data)
 
             if len(clip_data) > 0:
                 batch_data.extend(clip_data)
                 clips_count += 1
+            else:
+                logging.getLogger(__name__).info(
+                    f'No pedestrian is visible in {clip_idx}, removing files.')
+                self.remove_clip_files(manager.outputs_dir, clip_id)
 
-        return batch_data, clips_count  # batch_data has been flattened to a list of dicts
+         # batch_data has been flattened to a list of dicts
+        return batch_data, clips_count
+
+    def remove_clip_files(self, outputs_dir, clip_id):
+        if clip_id is not None:
+            path = os.path.join(outputs_dir, '{}-*'.format(clip_id))
+            exts = ['mp4', 'apng']
+            files = [f for ext in exts for f in glob.glob(f'{path}.{ext}')]
+            for file in files:
+                os.remove(file)
+
+    def has_pedestrian_in_semantic_segmentation(self, semantic_segmentation_file: str, camera_data: List[Dict[str, Any]]) -> bool:
+        """
+        Checks if there is a pedestrian in the semantic segmentation image.
+        https://carla.readthedocs.io/en/0.9.13/ref_sensors/#semantic-segmentation-camera
+        Pedestrian palette index is 4.
+
+        :param semantic_segmentation_file:
+        :return:
+        """
+        has_pedestrian_in_clip = False
+        with Image.open(semantic_segmentation_file) as img:
+            for frame in range(img.n_frames):
+                has_pedestrian_in_frame = False
+                img.seek(frame)
+                img_array = np.array(img)
+                if np.any(img_array == 4):
+                    has_pedestrian_in_frame = True
+                camera_data[frame]['frame.pedestrian.pose.in_segmentation'] = has_pedestrian_in_frame
+                has_pedestrian_in_clip = has_pedestrian_in_clip or has_pedestrian_in_frame
+
+        return has_pedestrian_in_clip

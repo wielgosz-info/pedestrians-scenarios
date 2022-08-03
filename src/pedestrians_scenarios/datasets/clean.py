@@ -1,8 +1,6 @@
 import ast
 import logging
 import os
-import sys
-from unittest import skip
 import cv2
 import numpy as np
 import urllib.request
@@ -41,7 +39,7 @@ def add_cli_args(parser):
     parser.add_argument(
         '--detection_failure_threshold',
         type=int,
-        help='Number of consecutive frames without YOLO-detected  pedestrians to remove the frames.',
+        help='Number of consecutive frames without YOLO-detected pedestrians to remove the frames.',
         default=3
     )
 
@@ -68,12 +66,14 @@ def command(dataset_dir, yolo_root, remove, min_clip_length, detection_failure_t
     csv_path = os.path.join(dataset_dir, 'data.csv')
     video_path = os.path.join(dataset_dir, 'clips')
 
-    df = remove_rows_with_bbox_outside_frame(csv_path, remove=remove, min_clip_length=min_clip_length)
+    df = remove_rows_with_bbox_outside_frame(
+        csv_path, remove=remove, min_clip_length=min_clip_length)
     df = sync_csv_and_videos(csv_path, video_path, remove=remove, df=df)
 
     file_names_no_pedestrians = remove_rows_with_no_pedestrians_detected(
         csv_path, video_path, remove=remove, yolo_root=yolo_root, df=df, detection_failure_threshold=detection_failure_threshold)
-    sync_csv_and_videos(csv_path, video_path, file_names_no_pedestrians, remove=remove, df=df)
+    sync_csv_and_videos(csv_path, video_path,
+                        file_names_no_pedestrians, remove=remove, df=df)
 
 
 def print_files_info(files_in_dir, files_in_csv,
@@ -114,7 +114,7 @@ def sync_csv_and_videos(csv_path, video_path, removed_from_dir_dry=None, remove=
 
     if len(remove_from_csv):
         remove_from_csv_prefixed = [os.path.join(
-                'clips', element) for element in remove_from_csv]
+            'clips', element) for element in remove_from_csv]
         df = df[~df['camera.recording'].isin(remove_from_csv_prefixed)]
 
     if remove:
@@ -151,81 +151,106 @@ def get_file_lists(video_path, df, removed_from_dir_dry=None):
 def remove_rows_with_no_pedestrians_detected(csv_path, video_path, remove=False, yolo_root='/outputs/YOLO_v3', df=None, detection_failure_threshold=3):
     """
     Checks if there is a pedestrian visible in the video in at least one frame.
+    If possible, checks the semantic segmentation flag to see if there is a pedestrian.
+    Otherwise, checks the YOLOv3 detection.
     Taken from:
     https://github.com/arunponnusamy/object-detection-opencv
     """
-    logger.info('Starting pedestrian detection in videos.')
+    logger.info('Starting pedestrian detection.')
 
     df = get_df(csv_path, df)
 
-    scale = 0.00392
-    yolov3_cfg = os.path.join(yolo_root, 'yolov3.cfg')
-    yolov3_weights = os.path.join(yolo_root, 'yolov3.weights')
+    if 'frame.pedestrian.pose.in_segmentation' in df.columns:
+        grouped = df.groupby('camera.recording')
+        mask = df['frame.idx'] > -1  # all true
 
-    os.makedirs(yolo_root, exist_ok=True)
-
-    # check if the files exist if not download them from url and put under current location
-    if not os.path.exists(yolov3_cfg):
-        logger.info('Downloading yolov3.cfg...')
-        urllib.request.urlretrieve(
-            'https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg',
-            yolov3_cfg
-        )
-    if not os.path.exists(yolov3_weights):
-        logger.info('Downloading yolov3.weights...')
-        urllib.request.urlretrieve(
-            'https://pjreddie.com/media/files/yolov3.weights',
-            yolov3_weights
-        )
-
-    # read pre-trained model and config file
-    net = cv2.dnn.readNet(yolov3_weights, yolov3_cfg)
-
-    grouped = df.groupby('camera.recording')
-    mask = df['frame.idx'] > -1  # all true
-
-    for name, group in tqdm(grouped, desc='Detecting pedestrians'):
-        # read video
-        file_name = name.replace(os.path.split(video_path)[-1] + os.path.sep, '')
-        video_file = os.path.join(video_path, file_name)
-        video = cv2.VideoCapture(video_file)
-
-        frame_count = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-        frame_idx = 0
-        skipped = 0
-        consecutive_frames_without_pedestrian = 0
-
-        pbar = tqdm(total=frame_count, desc='{}'.format(file_name), leave=False, unit='f')
-        pbar.set_postfix(skipped=0)
-
-        while video.isOpened():
-            # read first frame
-            success, frame = video.read()
-            # quit if unable to read the video file
-            if not success:
-                break
-
-            if frame_idx in group['frame.idx'].values:
-                is_pedestrian_in_frame = process_frame(scale, net, frame)
+        for name, group in tqdm(grouped, desc='Checking segmentation flag'):
+            consecutive_frames_without_pedestrian = 0
+            for frame_idx, is_pedestrian_in_frame in zip(
+                group['frame.idx'].values,
+                group['frame.pedestrian.pose.in_segmentation'].values
+            ):
                 if not is_pedestrian_in_frame:
                     consecutive_frames_without_pedestrian += 1
                 else:
                     consecutive_frames_without_pedestrian = 0
 
                 if consecutive_frames_without_pedestrian >= detection_failure_threshold:
-                    mask = mask & (((df['frame.idx'] > frame_idx) | (df['frame.idx'] <= frame_idx - detection_failure_threshold)) | (df['camera.recording'] != name))
-            else:
-                skipped += 1
-                consecutive_frames_without_pedestrian += 1
-                pbar.set_postfix(skipped=skipped)
+                    mask = mask & (((df['frame.idx'] > frame_idx) | (
+                        df['frame.idx'] <= frame_idx - detection_failure_threshold)) | (df['camera.recording'] != name))
+    else:
+        logger.info('Starting YOLOv3 detection.')
 
-            frame_idx += 1
-            pbar.update(1)
+        scale = 0.00392
+        yolov3_cfg = os.path.join(yolo_root, 'yolov3.cfg')
+        yolov3_weights = os.path.join(yolo_root, 'yolov3.weights')
 
-        if video.isOpened():
-            video.release()
+        os.makedirs(yolo_root, exist_ok=True)
 
-        pbar.close()
+        # check if the files exist if not download them from url and put under current location
+        if not os.path.exists(yolov3_cfg):
+            logger.info('Downloading yolov3.cfg...')
+            urllib.request.urlretrieve(
+                'https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg',
+                yolov3_cfg
+            )
+        if not os.path.exists(yolov3_weights):
+            logger.info('Downloading yolov3.weights...')
+            urllib.request.urlretrieve(
+                'https://pjreddie.com/media/files/yolov3.weights',
+                yolov3_weights
+            )
+
+        # read pre-trained model and config file
+        net = cv2.dnn.readNet(yolov3_weights, yolov3_cfg)
+
+        grouped = df.groupby('camera.recording')
+        mask = df['frame.idx'] > -1  # all true
+
+        for name, group in tqdm(grouped, desc='Detecting pedestrians'):
+            # read video
+            file_name = name.replace(os.path.split(video_path)[-1] + os.path.sep, '')
+            video_file = os.path.join(video_path, file_name)
+            video = cv2.VideoCapture(video_file)
+
+            frame_count = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+            frame_idx = 0
+            skipped = 0
+            consecutive_frames_without_pedestrian = 0
+
+            pbar = tqdm(total=frame_count, desc='{}'.format(
+                file_name), leave=False, unit='f')
+            pbar.set_postfix(skipped=0)
+
+            while video.isOpened():
+                # read first frame
+                success, frame = video.read()
+                # quit if unable to read the video file
+                if not success:
+                    break
+
+                if frame_idx in group['frame.idx'].values:
+                    is_pedestrian_in_frame = process_frame(scale, net, frame)
+                    if not is_pedestrian_in_frame:
+                        consecutive_frames_without_pedestrian += 1
+                    else:
+                        consecutive_frames_without_pedestrian = 0
+
+                    if consecutive_frames_without_pedestrian >= detection_failure_threshold:
+                        mask = mask & (((df['frame.idx'] > frame_idx) | (
+                            df['frame.idx'] <= frame_idx - detection_failure_threshold)) | (df['camera.recording'] != name))
+                else:
+                    skipped += 1
+                    consecutive_frames_without_pedestrian += 1
+                    pbar.set_postfix(skipped=skipped)
+
+                frame_idx += 1
+                pbar.update(1)
+
+            if video.isOpened():
+                video.release()
+
+            pbar.close()
 
     removed_frames = len(df[~mask])
     df = df[mask]
@@ -236,6 +261,7 @@ def remove_rows_with_no_pedestrians_detected(csv_path, video_path, remove=False,
     logger.info(f'Finished pedestrian detection, {removed_frames} rows removed.')
 
     return df
+
 
 def process_frame(scale, net, frame):
     # create a 4D blob from a frame.
@@ -291,13 +317,16 @@ def has_pedestrian_in_frame(row):
     frame_width = row.get('camera.width', 800)
     frame_height = row.get('camera.height', 600)
 
-    projection_2d = np.array(ast.literal_eval(row['frame.pedestrian.pose.camera'].replace('nan', '"nan"')), dtype=np.float32)
-    
-    has_pedestrian_in_frame = np.any(
-        projection_2d[..., 0] >= 0) & np.any(
-        projection_2d[..., 1] >= 0) & np.any(
-        projection_2d[..., 0] <= frame_width) & np.any(
-        projection_2d[..., 1] <= frame_height)
+    projection_2d = np.array(ast.literal_eval(
+        row['frame.pedestrian.pose.camera'].replace('nan', '"nan"')), dtype=np.float32)
+
+    has_pedestrian_in_frame = np.all(np.isfinite(projection_2d))
+    if has_pedestrian_in_frame:
+        has_pedestrian_in_frame = np.any(
+            projection_2d[..., 0] >= 0) & np.any(
+            projection_2d[..., 1] >= 0) & np.any(
+            projection_2d[..., 0] <= frame_width) & np.any(
+            projection_2d[..., 1] <= frame_height)
 
     return has_pedestrian_in_frame
 
@@ -312,11 +341,15 @@ def remove_rows_with_bbox_outside_frame(csv_path, remove=False, df=None, min_cli
 
     # annotate if frame has even a fragment of a pedestrian
     logger.info('Finding frames with at least a fragment of a pedestrian...')
-    has_pedestrian_in_frame_mask = df.apply(has_pedestrian_in_frame, axis=1)
+    if 'frame.pedestrian.pose.camera' not in df.columns:
+        has_pedestrian_in_frame_mask = df.apply(has_pedestrian_in_frame, axis=1)
+    else:
+        has_pedestrian_in_frame_mask = df['frame.pedestrian.pose.in_frame']
 
     # get min/max frame number
     logger.info('Calculating min/max frame numbers...')
-    grouped = df[has_pedestrian_in_frame_mask].groupby(by=['camera.recording']).aggregate({'frame.idx': ['min', 'max']})
+    grouped = df[has_pedestrian_in_frame_mask].groupby(
+        by=['camera.recording']).aggregate({'frame.idx': ['min', 'max']})
     grouped.columns = grouped.columns.to_flat_index().map(lambda x: '_'.join(x))
 
     # only keep recordings with at least min_clip_length frames
@@ -339,7 +372,8 @@ def remove_rows_with_bbox_outside_frame(csv_path, remove=False, df=None, min_cli
     df = df[final_mask]
 
     new_size = len(df)
-    print('Number of rows after trimming: {} (removed {}%).'.format(new_size, round((original_size - new_size) / original_size * 100, 2)))
+    print('Number of rows after trimming: {} (removed {}%).'.format(
+        new_size, round((original_size - new_size) / original_size * 100, 2)))
 
     if remove and original_size != new_size:
         save_df(csv_path, df)
@@ -347,6 +381,7 @@ def remove_rows_with_bbox_outside_frame(csv_path, remove=False, df=None, min_cli
     logger.info('Trimming done.')
 
     return df
+
 
 def get_df(csv_path, df):
     if df is None:
@@ -356,6 +391,7 @@ def get_df(csv_path, df):
     else:
         logger.info('Using existing dataframe.')
     return df
+
 
 def save_df(csv_path, df):
     logger.info('Saving updated CSV.')

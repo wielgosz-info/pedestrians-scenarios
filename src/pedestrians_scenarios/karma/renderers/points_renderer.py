@@ -44,32 +44,21 @@ class PointsRenderer(Renderer):
 
         return rgba_frame
 
-    def points_to_image(self,
-                        points: np.ndarray,
-                        image_id: Union[str, int] = 'reference',
-                        outputs_dir: str = None,
-                        ):
+    def save(self,
+             frame: np.ndarray,
+             name: Union[str, int] = 'reference',
+             outputs_dir: str = None,
+             ):
         """
-        Draws the points and saves the image.
+        Saves the image.
         """
-        assert points.ndim == 2 and points.shape[
-            1] == 2, f'points must be Bx2 numpy array, this is {points.shape}'
+        if outputs_dir is None:
+            outputs_dir = os.path.join(os.getcwd(), 'points_renderer')
+        os.makedirs(outputs_dir, exist_ok=True)
 
-        canvas = np.zeros((self._image_size[1], self._image_size[0], 4), np.uint8)
-        canvas = self.draw_projection_points(
-            canvas, points, self._input_nodes
-        )
-
-        if image_id is not None:
-            if outputs_dir is None:
-                outputs_dir = os.path.join(os.getcwd(), 'points_renderer')
-            os.makedirs(outputs_dir, exist_ok=True)
-
-            img = Image.fromarray(canvas, 'RGBA')
-            img.save(os.path.join(outputs_dir, '{:s}_pose.png'.format("{:06d}".format(image_id)
-                                                                      if isinstance(image_id, int) else image_id)), 'PNG')
-
-        return canvas
+        img = Image.fromarray(frame, 'RGBA')
+        img.save(os.path.join(outputs_dir, '{:s}.png'.format("{:06d}_pose".format(name)
+                                                             if isinstance(name, int) else name)), 'PNG')
 
     @staticmethod
     def draw_projection_points(canvas, points, skeleton, color_values=None, lines=False):
@@ -85,11 +74,13 @@ class PointsRenderer(Renderer):
 
         if color_values is None:
             skeleton_colors = skeleton.get_colors()
-            color_values = [skeleton_colors[k] for k in skeleton]  # ensure colors are in the same order as joints
+            # ensure colors are in the same order as joints
+            color_values = [skeleton_colors[k] for k in skeleton]
 
         # if we know that skeleton has root point, we can draw it
         root_point = skeleton.get_root_point() if skeleton is not None else None
-        root_point = root_point.value if isinstance(root_point, Skeleton) else root_point
+        root_point = root_point.value if isinstance(
+            root_point, Skeleton) else root_point
         if root_point is not None:
             draw.rectangle(
                 [tuple(rounded_points[0] - 2), tuple(rounded_points[0] + 2)],

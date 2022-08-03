@@ -22,7 +22,7 @@ class Generator(object):
     def __init__(self,
                  outputs_dir: str = './datasets',
                  number_of_clips: int = 512,
-                 clip_length_in_frames: int = 600,
+                 clip_length_in_frames: int = 900,
                  pedestrian_distributions: Iterable[Tuple[PedestrianProfile, float]] = (
                      (ExamplePedestrianProfiles.adult_female.value, 0.25),
                      (ExamplePedestrianProfiles.adult_male.value, 0.25),
@@ -36,17 +36,18 @@ class Generator(object):
                  ),),
                  batch_size: int = 1,
                  camera_fov: float = 90.0,
-                 camera_image_size: Tuple[int, int] = (800, 600),
+                 camera_image_size: Tuple[int, int] = (1600, 600),
                  failure_multiplier: int = 2,
+                 overwrite: bool = False,
                  **kwargs
                  ) -> None:
         self._outputs_dir = outputs_dir
         # Ensure that the output directory exists AND is empty
         if os.path.exists(self._outputs_dir):
-            if os.listdir(self._outputs_dir):
+            if os.listdir(self._outputs_dir) and not overwrite:
                 raise ValueError(
                     f'Output directory {self._outputs_dir} is not empty.')
-        os.makedirs(self._outputs_dir, exist_ok=False)
+        os.makedirs(self._outputs_dir, exist_ok=overwrite)
 
         # handle complex config data
         self._camera_distances_distributions = self.__parse_camera_position_distributions(
@@ -113,18 +114,19 @@ class Generator(object):
                                help='Directory to store outputs (default: ./datasets).')
         subparser.add_argument('--number_of_clips', type=int, default=512,
                                help='Total number of clips to generate.')
-        subparser.add_argument('--clip_length_in_frames', type=int, default=600,
+        subparser.add_argument('--clip_length_in_frames', type=int, default=900,
                                help='Length of each clip in frames.')
         subparser.add_argument('--batch_size', type=int, default=1,
                                help='Number of clips in each batch.')
         subparser.add_argument('--camera_fov', type=float, default=90.0,
                                help='Camera horizontal FOV in degrees.')
-        subparser.add_argument('--camera_image_size', type=ast.literal_eval, default='(800,600)',
-                               help='Camera image size in pixels as a (width, height) tuple (default: (800,600)).')
+        subparser.add_argument('--camera_image_size', type=ast.literal_eval, default='(1600,600)',
+                               help='Camera image size in pixels as a (width, height) tuple (default: (1600,600)).')
         subparser.add_argument('--waypoint_jitter_scale', type=float,
                                default=1.0, help='Scale of jitter applied to waypoints.')
         subparser.add_argument('--failure_multiplier', type=int,
                                default=2, help='Multiplier for number of clips to generate in case of failure.')
+        subparser.add_argument('--overwrite', action='store_true', default=False)
 
         return parser
 

@@ -7,6 +7,9 @@ from typing import Dict, Iterable, List, Tuple, Union
 import av
 import carla
 import numpy as np
+from PIL import Image
+
+from pedestrians_scenarios.karma.renderers.segmentation_renderer import SegmentationRenderer
 
 from ..karma import Karma, KarmaStage
 from ..karma_data_provider import KarmaDataProvider
@@ -38,6 +41,8 @@ class CamerasManager(object):
         # streamed cameras are all cameras that the Camera Manager should get data from
         # this includes managed cameras and e.g. vehicle cameras
         self.__streamed_cameras: Dict[int, Union[FreeCamera, Camera]] = {}
+        # some cameras are synchronized, i.e. they show the same scene, but in different 'modes'
+        self.__synchronized_cameras: List[List[int]] = []
 
         if not isinstance(merging_method, FramesMergingMathod):
             assert len(
@@ -54,13 +59,23 @@ class CamerasManager(object):
         self.__files_number = None
         self.__tick_callback_id = None
         self.__close_callback_id = None
+        self.__names = []
+
+        self.__segmentation_labels = []
+        self.__segmentation_renderer = SegmentationRenderer()
 
         self.__captured_frames: List[int] = None
+
+    @property
+    def outputs_dir(self) -> str:
+        return self.__outputs_dir
 
     def create_free_cameras(self,
                             cameras: Iterable[Tuple[carla.Transform, Iterable[float]]],
                             image_size: Tuple[int, int] = (800, 600),
                             fov: float = 90.0,
+                            camera_types: Iterable[str] = (
+                                'rgb', 'semantic_segmentation'),
                             ):
         """
         Creates cameras at the given locations and registers them with the Camera Manager.
@@ -73,17 +88,25 @@ class CamerasManager(object):
         :type image_size: Tuple[int, int]
         :param fov: Field of view of the camera in degrees. Default: 90.0
         :type fov: float
+        :param camera_types: List of camera types to create. Default: ('rgb', 'semantic_segmentation')
+        :type camera_types: Iterable[str]
         """
         for look_at, distance in cameras:
-            camera = FreeCamera(
-                look_at=look_at,
-                distance=distance,
-                image_size=image_size,
-                fov=fov,
-                tick=False,
-                register=False,
-            )
-            self.__managed_cameras[camera.id] = camera
+            synced = []
+            for camera_type in camera_types:
+                camera = FreeCamera(
+                    look_at=look_at,
+                    distance=distance,
+                    image_size=image_size,
+                    fov=fov,
+                    tick=False,
+                    register=False,
+                    camera_type=camera_type,
+                )
+                self.__managed_cameras[camera.id] = camera
+                synced.append(camera.id)
+            if len(synced) > 1:
+                self.__synchronized_cameras.append(synced)
 
         # spawn cameras
         self.__karma.tick()
@@ -157,8 +180,12 @@ class CamerasManager(object):
             session_id = str(uuid.uuid4())
 
         self.__video_columns, self.__video_rows, self.__files_number = self.get_merging_info()
-        sizes = np.array(
-            [camera.image_size for camera in self.__streamed_cameras.values()])
+
+        all_cameras: List[Union[FreeCamera, Camera]] = list(
+            self.__streamed_cameras.values())
+        sizes = np.array([camera.image_size for camera in all_cameras])
+        cameras_per_file = self.__video_rows*self.__video_columns
+
         self.__column_width = sizes[:, 0].max()
         self.__row_height = sizes[:, 1].max()
         self.__total_width = self.__column_width * self.__video_columns
@@ -179,11 +206,21 @@ class CamerasManager(object):
             self.__containers.append(container)
             self.__streams.append(stream)
 
+            # we also want to save unprocessed segmentation labels if there are any
+            segmentation_labels = {}
+            cameras = all_cameras[fi*cameras_per_file:(fi+1)*cameras_per_file]
+            for camera in cameras:
+                if camera.camera_type == 'semantic_segmentation':
+                    segmentation_labels[camera.id] = []
+
+            self.__segmentation_labels.append(segmentation_labels)
+
         self.__tick_callback_id = self.__karma.register_callback(
             KarmaStage.tick, self.__on_tick)
         self.__close_callback_id = self.__karma.register_callback(
             KarmaStage.close, self.stop_recording)
 
+        self.__names = names
         return names
 
     def __on_tick(self, snapshot: carla.WorldSnapshot, *args, **kwargs):
@@ -193,12 +230,15 @@ class CamerasManager(object):
 
         all_cameras: List[Union[FreeCamera, Camera]] = list(
             self.__streamed_cameras.values())
+        cameras_per_file = self.__video_rows*self.__video_columns
+
+        # TODO: each camera should have a save format (MP4 or APNG) and the division should be based on that
+        # instead of directly using camera_type and saving segmentation twice
         for fi in range(len(self.__containers)):
             container = self.__containers[fi]
             stream = self.__streams[fi]
-            cameras_in_file = self.__video_rows*self.__video_columns
             img = np.zeros((self.__total_height, self.__total_width, 3), dtype=np.uint8)
-            cameras = all_cameras[fi*cameras_in_file:(fi+1)*cameras_in_file]
+            cameras = all_cameras[fi*cameras_per_file:(fi+1)*cameras_per_file]
 
             for (r, c), camera in zip(
                 itertools.product(range(self.__video_rows),
@@ -211,6 +251,17 @@ class CamerasManager(object):
                     c*self.__column_width:c*self.__column_width+data.shape[1],
                     :
                 ] = data
+
+                if camera.camera_type == 'semantic_segmentation':
+                    # get_raw_data never returns anything if data was not captured
+                    labels = camera.get_raw_data()
+                    if labels is not None:
+                        # CARLA encodes labels in red channel & raw data is in BGRA format
+                        self.__segmentation_labels[fi][camera.id].append(labels[..., 2])
+                    else:
+                        # return all zeros (Unknown)
+                        self.__segmentation_labels[fi][camera.id].append(
+                            np.zeros((data.shape[0], data.shape[1]), dtype=np.uint8))
 
             frame = av.VideoFrame.from_ndarray(img, format="rgb24")
             frame.pict_type = "NONE"
@@ -235,6 +286,25 @@ class CamerasManager(object):
 
                 self.__containers[fi].close()
 
+        if self.__segmentation_labels is not None:
+            for fi, name in enumerate(self.__names):
+                if not self.__segmentation_labels[fi]:
+                    continue
+
+                file_labels = np.stack(
+                    list(self.__segmentation_labels[fi].values()), axis=0)
+                if file_labels.shape[0] > 1:
+                    for ci, sequence in enumerate(self.__segmentation_renderer.render(file_labels)):
+                        self.__segmentation_renderer.save(
+                            sequence, f'{name}-{ci}', self.__outputs_dir)
+                else:
+                    sequence = next(self.__segmentation_renderer.render(file_labels))
+                    self.__segmentation_renderer.save(
+                        sequence, name, self.__outputs_dir)
+
+                # remove obsolete segmentation mp4 file
+                os.remove(os.path.join(self.__outputs_dir, f'{name}.mp4'))
+
         if self.__tick_callback_id is not None:
             self.__karma.unregister_callback(self.__tick_callback_id)
 
@@ -245,6 +315,7 @@ class CamerasManager(object):
 
         self.__containers = []
         self.__streams = []
+        self.__segmentation_labels = []
         self.__files_number = None
         self.__video_columns = None
         self.__video_rows = None
@@ -259,3 +330,13 @@ class CamerasManager(object):
         Returns a list of cameras that are being streamed.
         """
         return list(self.__streamed_cameras.values())
+
+    def get_synchronized_cameras(self) -> List[List[Camera]]:
+        """
+        Returns a list of cameras that are synchronized.
+        If there is no synchronization, returns empty list.
+        """
+        return [
+            [self.__streamed_cameras[camera_id] for camera_id in sync_group]
+            for sync_group in self.__synchronized_cameras
+        ]

@@ -209,12 +209,12 @@ class SourceVideosRenderer(Renderer):
 
         canvas[:] = np.array(img)
 
-    def frames_to_video(self, frames: np.ndarray, video_name: str = 'out', outputs_dir: str = None, fps: int = 30) -> None:
+    def save(self, frames: np.ndarray, name: str = 'out', outputs_dir: str = None, fps: int = 30) -> None:
         if outputs_dir is None:
             outputs_dir = os.path.join(os.getcwd(), 'source_videos_renderer')
         os.makedirs(outputs_dir, exist_ok=True)
 
-        output_filename = os.path.join(outputs_dir, video_name + '.mp4')
+        output_filename = os.path.join(outputs_dir, name + '.mp4')
 
         with av.open(output_filename, mode="w") as container:
             stream = container.add_stream('libx264', rate=fps)

@@ -1,6 +1,8 @@
 from srunner.scenariomanager.actorcontrols.basic_control import BasicControl
 from srunner.scenariomanager.actorcontrols.pedestrian_control import PedestrianControl
 
+from pedestrians_scenarios.karma.karma_data_provider import KarmaDataProvider
+
 
 class BasicPedestrianControl(PedestrianControl):
     """
@@ -25,14 +27,12 @@ class BasicPedestrianControl(PedestrianControl):
 
         out = super().run_step()
 
+        road_waypoint = KarmaDataProvider.get_map().get_waypoint(
+            self._actor.get_location(), project_to_road=False)
+        self._actor.is_crossing = road_waypoint is not None
+
         if len(old_waypoints) != len(self._waypoints):
             self._reached_waypoints = self._reached_waypoints + 1
-
-            # TODO: Can this be check based on the pedestrian transform instead? Is Walker on the DrivingLane at the moment?
-            self._actor.is_crossing = self._road_waypoint_idx is not None and \
-                self._road_waypoint_idx > -1 and \
-                self._reached_waypoints > (
-                    self._road_waypoint_idx - 1)  # Pedestrian is going towards road waypoint (is crossing)
 
         return out
 
@@ -41,6 +41,6 @@ class BasicPedestrianControl(PedestrianControl):
         # it is probably stuck somewhere, and therefore useless
         return self._reached_waypoints > 0
 
+    # TODO: remove when FiveScenarios is fixed
     def set_lane_waypoint_idx(self, waypoint_pos):
         self._road_waypoint_idx = waypoint_pos
-        self._actor.is_crossing = self._road_waypoint_idx == 0

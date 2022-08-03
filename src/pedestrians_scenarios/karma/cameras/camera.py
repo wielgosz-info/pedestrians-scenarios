@@ -43,6 +43,7 @@ class Camera(object):
 
         self._capture_failure_mode = capture_failure_mode
         self._last_frame = None
+        self._raw_data = None
         if self._capture_failure_mode == 'last':
             self._last_frame = np.zeros(self._image_shape, dtype=np.uint8)
 
@@ -56,6 +57,10 @@ class Camera(object):
     @property
     def sensor(self) -> carla.Sensor:
         return self._camera
+
+    @property
+    def camera_type(self) -> str:
+        return self._type
 
     def get_transform(self) -> carla.Transform:
         return self._camera.get_transform()
@@ -73,13 +78,24 @@ class Camera(object):
 
         if len(frames):
             data = frames[-1]
-            data.convert(self._converter)
+
+            # get raw data (BGRA)
             img = Image.frombuffer('RGBA', (data.width, data.height),
                                    data.raw_data, 'raw', 'RGBA', 0, 1)  # load
+            # save raw data (e.g. to keep semantic labels untouched)
+            self._raw_data = np.array(img).copy()
+
+            if self._converter != carla.ColorConverter.Raw:
+                # convert to human- & mp4-friendly format
+                data.convert(self._converter)
+                img = Image.frombuffer('RGBA', (data.width, data.height),
+                                       data.raw_data, 'raw', 'RGBA', 0, 1)  # load
+
             img = img.convert('RGB')  # drop alpha
             # the data is actually in BGR format, so switch channels
             self._last_frame = np.array(img)[..., ::-1]
         else:
+            self._raw_data = None
             if self._capture_failure_mode == CaptureFailureMode.zero:
                 self._last_frame = np.zeros(self._image_shape, dtype=np.uint8)
             elif self._capture_failure_mode == CaptureFailureMode.noise:
@@ -91,3 +107,6 @@ class Camera(object):
                 self._last_frame = None
 
         return self._last_frame.copy()
+
+    def get_raw_data(self) -> Union[np.ndarray, None]:
+        return self._raw_data
