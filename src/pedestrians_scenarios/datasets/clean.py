@@ -134,6 +134,9 @@ def get_file_lists(video_path, df, removed_from_dir_dry=None):
     files_in_dir = set(os.listdir(video_path))
     files_in_csv = set([path.replace('clips/', '')
                         for path in df['camera.recording'].unique()])
+    if 'camera.semantic_segmentation' in df.columns:
+        files_in_csv = files_in_csv.union(set([path.replace('clips/', '')
+                                               for path in df['camera.semantic_segmentation'].unique()]))
 
     if removed_from_dir_dry is not None:
         files_in_dir = files_in_dir.difference(removed_from_dir_dry)
@@ -341,7 +344,7 @@ def remove_rows_with_bbox_outside_frame(csv_path, remove=False, df=None, min_cli
 
     # annotate if frame has even a fragment of a pedestrian
     logger.info('Finding frames with at least a fragment of a pedestrian...')
-    if 'frame.pedestrian.pose.camera' not in df.columns:
+    if 'frame.pedestrian.pose.in_frame' not in df.columns:
         has_pedestrian_in_frame_mask = df.apply(has_pedestrian_in_frame, axis=1)
     else:
         has_pedestrian_in_frame_mask = df['frame.pedestrian.pose.in_frame']
