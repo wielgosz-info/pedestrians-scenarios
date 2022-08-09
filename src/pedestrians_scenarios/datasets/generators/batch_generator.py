@@ -10,9 +10,7 @@ from PIL import Image
 import carla
 import numpy as np
 import pandas as pd
-from pedestrians_scenarios.datasets.clean import has_pedestrian_in_frame
-from pedestrians_scenarios.karma.cameras import (CamerasManager,
-                                                 FramesMergingMathod)
+from pedestrians_scenarios.karma.cameras import CamerasManager
 from pedestrians_scenarios.karma.karma import Karma, KarmaStage
 from pedestrians_scenarios.karma.karma_data_provider import KarmaDataProvider
 from pedestrians_scenarios.karma.pose.pose_dict import (
@@ -309,7 +307,6 @@ class BatchGenerator(mp.Process):
             manager = CamerasManager(
                 self._karma,
                 outputs_dir=os.path.join(self._outputs_dir, 'clips'),
-                merging_method=FramesMergingMathod.none
             )
             manager.create_free_cameras(
                 cameras=zip(camera_look_at, camera_distances),

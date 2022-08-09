@@ -81,7 +81,7 @@ class SourceVideosRenderer(Renderer):
             yield video
 
     def render_clip(self, set_name, video_id, pedestrian_id, clip_id, start_frame, end_frame, bboxes=None, skeletons=None, labels=None):
-        (canvas_width, canvas_height) = self._image_size
+        (canvas_width, canvas_height) = self.image_size
         half_width = int(math.floor(canvas_width / 2))
         half_height = int(math.floor(canvas_height / 2))
         canvas = np.zeros((end_frame - start_frame, canvas_height,
@@ -218,8 +218,8 @@ class SourceVideosRenderer(Renderer):
 
         with av.open(output_filename, mode="w") as container:
             stream = container.add_stream('libx264', rate=fps)
-            stream.width = self._image_size[0]
-            stream.height = self._image_size[1]
+            stream.width = self.image_size[0]
+            stream.height = self.image_size[1]
             stream.pix_fmt = "yuv420p"
             stream.options = {}
 

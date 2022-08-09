@@ -37,7 +37,7 @@ class PointsRenderer(Renderer):
 
     def render_frame(self, frame: np.ndarray) -> np.ndarray:
         canvas = np.zeros(
-            (self._image_size[1], self._image_size[0], 4), np.uint8)
+            (self.image_size[1], self.image_size[0], 4), np.uint8)
 
         rgba_frame = self.draw_projection_points(
             canvas, frame, self._input_nodes)

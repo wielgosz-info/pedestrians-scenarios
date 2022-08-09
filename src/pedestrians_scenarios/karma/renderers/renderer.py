@@ -13,7 +13,9 @@ class AlphaBehavior(Enum):
 class Renderer(object):
     def __init__(self, image_size: Tuple[int, int] = (800, 600), alpha: AlphaBehavior = AlphaBehavior.drop, **kwargs) -> None:
         self._alpha = alpha
-        self._image_size = image_size
+
+        # public to allow runtime overriding
+        self.image_size = image_size
 
     def render(self, frames: Union['Tensor', np.ndarray], **kwargs) -> List[np.ndarray]:
         """
@@ -27,7 +29,7 @@ class Renderer(object):
         """
         rendered_videos = len(frames)
         for _ in range(rendered_videos):
-            yield self.alpha_behavior(np.zeros((frames.shape[1], self._image_size[1], self._image_size[0], 4), dtype=np.uint8))
+            yield self.alpha_behavior(np.zeros((frames.shape[1], self.image_size[1], self.image_size[0], 4), dtype=np.uint8))
 
     def alpha_behavior(self, rgba_frames: np.ndarray) -> np.ndarray:
         if self._alpha == AlphaBehavior.drop:

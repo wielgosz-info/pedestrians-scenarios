@@ -1,4 +1,5 @@
 import os
+from pickletools import optimize
 from typing import Iterable, List, Union
 
 import numpy as np
@@ -16,14 +17,13 @@ class SegmentationRenderer(Renderer):
         self._bits = int(np.ceil(np.log2(len(palette) // 3)))
 
     def render(self, frames: Union['Tensor', np.ndarray], **kwargs) -> List[np.ndarray]:
-        rendered_videos = len(frames)
-
         if isinstance(frames, np.ndarray):
             cpu_frames = frames
         else:
             cpu_frames = frames.cpu().numpy()
 
         cpu_frames = cpu_frames.round().astype(np.uint8)
+        rendered_videos = len(cpu_frames)
 
         for clip_idx in range(rendered_videos):
             video = self.render_clip(cpu_frames[clip_idx])
@@ -49,5 +49,7 @@ class SegmentationRenderer(Renderer):
             save_all=True,
             append_images=frames[1:],
             duration=1000 / fps,
-            loop=0,
+            loop=1,
+            compress_level=9,
+            bits=self._bits,
         )

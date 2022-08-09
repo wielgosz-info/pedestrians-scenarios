@@ -17,9 +17,9 @@ class FreeCamera(Actor, Camera):
                  camera_type: str = 'rgb',
                  **kwargs
                  ):
-        if camera_type not in ['rgb', 'depth', 'semantic_segmentation']:
+        if camera_type not in ['rgb', 'depth', 'semantic_segmentation', 'instance_segmentation', 'dvs']:
             raise ValueError(
-                'Camera type must be one of "rgb", "depth", "semantic_segmentation".')
+                'Camera type must be one of "rgb", "depth", "semantic_segmentation", "instance_segmentation" or "dvs".')
 
         camera_location = carla.Location(look_at.transform(carla.Location(*distance)))
         camera_transform = carla_look_at(look_at, camera_location)
