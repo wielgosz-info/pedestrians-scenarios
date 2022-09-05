@@ -68,3 +68,5 @@ class DVSRenderer(SegmentationRenderer):
         if self._mode != DVSOutputFormat.events:
             fps = fps if self._mode == DVSOutputFormat.img_frame else 1000
             return super().save(frames, name, outputs_dir, fps)
+        else:
+            return np.save(os.path.join(outputs_dir, name), frames, allow_pickle=False)
