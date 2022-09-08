@@ -9,7 +9,7 @@ except ModuleNotFoundError:
     warnings.warn("Using mock carla.", ImportWarning)
 
 
-def carla_to_scipy_rotation(rotation: Union[carla.Rotation, carla.Transform]) -> Rotation:
+def carla_to_scipy_rotation(rotation: Union['carla.Rotation', 'carla.Transform']) -> Rotation:
     """
     Converts carla.Rotation or carla.Transform to scipy.spatial.transform.Rotation
     """
@@ -25,7 +25,7 @@ def carla_to_scipy_rotation(rotation: Union[carla.Rotation, carla.Transform]) ->
     ], degrees=True)
 
 
-def scipy_to_carla_rotation(rotation: Rotation) -> carla.Rotation:
+def scipy_to_carla_rotation(rotation: Rotation) -> 'carla.Rotation':
     """
     Converts scipy.spatial.transform.Rotation to carla.Rotation
     """
@@ -38,7 +38,7 @@ def scipy_to_carla_rotation(rotation: Rotation) -> carla.Rotation:
     )
 
 
-def mul_carla_rotations(reference_rotation: carla.Rotation, local_rotation: carla.Rotation) -> carla.Rotation:
+def mul_carla_rotations(reference_rotation: 'carla.Rotation', local_rotation: 'carla.Rotation') -> 'carla.Rotation':
     """
     Multiplies two carla.Rotation objects by converting them to scipy.spatial.transform.Rotation
     and then converting the result back (since carla.Rotation API doesn't offer that option).
@@ -51,7 +51,7 @@ def mul_carla_rotations(reference_rotation: carla.Rotation, local_rotation: carl
     return scipy_to_carla_rotation(reference_rot*local_rot)
 
 
-def look_at(target: carla.Transform, camera_location: carla.Location) -> carla.Transform:
+def look_at(target: 'carla.Transform', camera_location: 'carla.Location') -> 'carla.Transform':
     up = target.get_up_vector()
     f = (target.location - camera_location).make_unit_vector()
     s = f.cross(up).make_unit_vector()
