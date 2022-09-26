@@ -121,7 +121,7 @@ class SourceVideosRenderer(Renderer):
         except AssertionError:
             # no video or multiple candidates - skip
             logging.getLogger(__name__).warn(
-                "Clip extraction failed for {}, {}, {}".format(video_id, pedestrian_id, clip_id))
+                "Clip extraction failed for {}, {}, {}, {}".format(set_name, video_id, pedestrian_id, clip_id))
 
         return canvas
 
