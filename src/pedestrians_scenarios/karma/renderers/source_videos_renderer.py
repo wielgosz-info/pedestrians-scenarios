@@ -54,10 +54,13 @@ class SourceVideosRenderer(Renderer):
     def overlay_labels(self) -> bool:
         return self.__overlay_labels
 
-    def render(self, meta: List[Dict[str, Any]], bboxes: Iterable[np.ndarray] = None, **kwargs) -> List[np.ndarray]:
+    def render(self, meta: List[Dict[str, Any]], bboxes: Iterable[np.ndarray] = None, eval_slice: slice = slice(None), **kwargs) -> List[np.ndarray]:
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         rendered_videos = len(meta['video_id'])
+        start_offset = eval_slice.start if eval_slice.start is not None else 0
+        stop_offset = int(meta['end_frame'][0] - meta['start_frame'][0] -
+                          eval_slice.stop) if eval_slice.stop is not None else 0
 
         for clip_idx in range(rendered_videos):
             video = self.render_clip(
@@ -65,8 +68,8 @@ class SourceVideosRenderer(Renderer):
                 meta['video_id'][clip_idx],
                 meta['pedestrian_id'][clip_idx],
                 meta['clip_id'][clip_idx],
-                meta['start_frame'][clip_idx],
-                meta['end_frame'][clip_idx],
+                meta['start_frame'][clip_idx] + start_offset,
+                meta['end_frame'][clip_idx] - stop_offset,
                 bboxes[clip_idx] if bboxes is not None else None,
                 [{
                     'keypoints': sk['keypoints'][clip_idx],
