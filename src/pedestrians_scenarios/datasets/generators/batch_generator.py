@@ -617,7 +617,7 @@ class BatchGenerator(mp.Process):
     def remove_clip_files(self, outputs_dir, clip_id):
         if clip_id is not None:
             path = os.path.join(outputs_dir, '{}-*'.format(clip_id))
-            exts = ['mp4', 'apng']
+            exts = ['mp4', 'apng', 'npy']
             files = [f for ext in exts for f in glob.glob(f'{path}.{ext}')]
             for file in files:
                 os.remove(file)

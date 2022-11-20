@@ -7,7 +7,85 @@ It isn't intended for fully standalone use. Please see the [main project README.
 
 Copy the `.env.template` file to `.env` and edit the values as required.
 
-## Running
+## Available options
+
+Run `python -m pedestrians_scenarios --help` to see the full list of available options.
+
+### `datasets`
+
+This command is the entrypoint for dataset-generation related tasks.
+
+```sh
+python -m pedestrians_scenarios datasets --help
+```
+
+#### `datasets generate`
+
+This command generates the dataset according to specified parameters.
+
+```sh
+python -m pedestrians_scenarios datasets generate <options>
+```
+
+##### Generic options
+
+- `-h`, `--help` show help message and exit. Please use this for full list of available options.
+- `-c CONFIG`, `--config CONFIG` Config file path. Settings in this file will override those passed via CLI
+
+
+##### Selected server-related options
+
+-  `--seed SEED` Seed used by the everything (default: 22752). If you want to generate a dataset with the same options, but in multiple shots, you need to manually change the seed with each run. You should ensure the seed differs by at least `number_of_clips * failure_multiplier` between runs.
+-  `--fps FPS` FPS of the simulation (default: 30)
+
+##### Selected generator options
+- `--outputs_dir OUTPUTS_DIR` Directory to store outputs (default: ./datasets).
+- `--number_of_clips NUMBER_OF_CLIPS` Total number of clips to generate (default: 512).
+- `--clip_length_in_frames CLIP_LENGTH_IN_FRAMES`  Length of each clip in frames (default: 900).
+- `--batch_size BATCH_SIZE` Number of clips in each batch (default: 1). This is the number of scenarios that will be simulated in the same world at the same time. This is useful for speeding up the generation process, but it also means that the generated clips can contain pedestrians from different scenarios in the camera viewport.
+- `--camera_fov CAMERA_FOV` Camera horizontal FOV in degrees (default: 90.0).
+- `--camera_image_size CAMERA_IMAGE_SIZE` Camera image size in pixels as a (width, height) tuple (default: (1600,600)).
+- `--waypoint_jitter_scale WAYPOINT_JITTER_SCALE` Scale of jitter applied to waypoints (default: 1.0). This determines how much the pedestrians will deviate from the "ideal" path. The higher the value, the more they will deviate.
+- `--failure_multiplier FAILURE_MULTIPLIER` Multiplier for number of clips to generate in case of failure (default: 2). As generating a clip is a stochastic process, it can fail (CARLA server shuts down, pedestrian is stuck, something obstructs the view of the pedestrian during the whole clip etc.). This option determines how many tries in total the process will make before giving up. The total number of tries is `number_of_clips * failure_multiplier`.
+- `--overwrite` Overwrite existing output dir (default: False). As a default, if generator detects that the output directory already exists, it will abort the process. This option forces the generator to overwrite the existing directory. **Please note that this will override the files in the directory, possibly resulting in data loss.** 
+```
+
+Example command can look like this:
+
+```sh
+python -m pedestrians_scenarios datasets generate \
+    --outputs_dir /outputs/scenarios/small-sample \
+    --number_of_clips 16 \
+    --failure_multiplier 8
+```
+
+#### `datasets merge`
+
+Allows to merge multiple datasets into one, ensuring that the clip IDs are unique.
+
+```sh
+python -m pedestrians_scenarios datasets merge --input_dirs <list_of_input_dirs> --output_dir <output_dir>
+```
+
+#### `datasets clean`
+
+Especially in the older versions of the generator, there were many output videos which did not contain pedestrians. Therefore, we developed an automated cleaning procedure that checks if pedestrian is visible at any point in the video using YOLOv3. A usage example:
+
+```sh
+python -m pedestrians_scenarios datasets clean --dataset_dir /outputs/dataset-dir
+```
+
+The command above will run in a dry mode (the files will not be removed). If you actually want to remove them run the command with `--remove` flag:
+
+```sh
+python -m pedestrians_scenarios datasets clean --dataset_dir /outputs/dataset-dir --remove
+```
+
+Keep in mind that the video files which do not contain pedestrians in the folders you provide as the arguments will be removed from disk. The csv file will also be changed by removing rows which refer to videos which do not contain pedestrians.
+
+**Note: The cleaning procedure is not perfect. It may remove some videos which contain pedestrians or leave some videos which do not contain pedestrians. It is also quite slow. Therefore, it is better to not disable semantic cameras during dataset generation and take advantage of the (now) build-in filtering.**
+
+## Running original ScenarioRunner
 
 To launch the basic `ScenarioRunner`, run the following (example) command:
 ```sh
@@ -19,7 +97,7 @@ python scenario_runner.py --host server --route ./srunner/data/routes_debug.xml 
 The really important part is the `--host` parameter. We pass it the name of the carla server container
 as specified in our `docker-compose.yml` file.
 
-## Visualization
+### Visualization (only makes sense when running the original ScenarioRunner)
 
 Since all of the code is running inside a docker container, to see that is happening we would need to
 either setup some X11 forwarding magic (no, thank you) or approach it in a different way (yes, please).
@@ -66,18 +144,6 @@ ssh -v -N forward_carlaviz
 ```
 
 **Important note: if you need to restart the carlaviz container, kill the forwarding first, then restart carlaviz and wait for it to be running, and only then start forwarding again. Otherwise you will get stuck with "Launch the backend and refresh" message in the browser.**
-
-
-## Dataset cleaning
-There are quite many videos which do not contain pedestrians. It is possible to clean the folder with data using the cleaning script with the following command (this is a usage example):
-
-`python utils/sync_csv_and_videos.py --csv_path /outputs/jitter-10/data.csv --video_path /outputs/jitter-10/clips`
-
-The command above will run in a dry mode (the files will not be removed). If you actually want to remove them run this command (this is a usage example):
-
-`python utils/sync_csv_and_videos.py --csv_path /outputs/jitter-10/data.csv --video_path /outputs/jitter-10/clips --remove`
-
-Keep in mind that the video files which do not contain pedestrians in the folders you provide as the arguments will be removed. The csv file will also be changed by removing rows which refer to videos which do not contain pedestrians.
 
 
 ## Funding
