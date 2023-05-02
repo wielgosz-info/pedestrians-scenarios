@@ -146,6 +146,22 @@ ssh -v -N forward_carlaviz
 **Important note: if you need to restart the carlaviz container, kill the forwarding first, then restart carlaviz and wait for it to be running, and only then start forwarding again. Otherwise you will get stuck with "Launch the backend and refresh" message in the browser.**
 
 
+## Cite
+If you use this repo please cite:
+
+```
+@misc{wielgosz2023carlabsp,
+      title={{CARLA-BSP}: a simulated dataset with pedestrians}, 
+      author={Maciej Wielgosz and Antonio M. López and Muhammad Naveed Riaz},
+      month={May},
+      year={2023},
+      eprint={2305.00204},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
+```
+
+
 ## Funding
 
 |                                                                                                                              |                                                                                                                      |                                                                                                                                                                                                                                                                                                                                                                                      |
