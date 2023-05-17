@@ -1,5 +1,6 @@
 ARG PLATFORM=nvidia
-FROM wielgoszinfo/carla-common:${PLATFORM}-latest AS scenarios-cpu
+ARG IMAGES_NAMESPACE=wielgoszinfo
+FROM ${IMAGES_NAMESPACE}/carla-common:${PLATFORM}-latest AS scenarios-cpu
 
 ENV PACKAGE=pedestrians-scenarios
 

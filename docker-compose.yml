@@ -11,7 +11,7 @@ services:
         USERNAME: carla
         COMMIT: ${COMMIT}
         PLATFORM: ${PLATFORM:-nvidia}
-    image: wielgoszinfo/pedestrians-scenarios:${PLATFORM:-nvidia}-latest
+    image: ${IMAGES_NAMESPACE:-wielgoszinfo}/pedestrians-scenarios:${PLATFORM:-nvidia}-latest
     user: ${USER_ID}:${GROUP_ID}
     volumes:
       - /etc/localtime:/etc/localtime:ro
