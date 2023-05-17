@@ -1,12 +1,26 @@
 try:
     import pedestrians_scenarios.karma as km
+    from .generators.generator import Generator
     from .generators.binary_single_pedestrian import BinarySinglePedestrian
+    from .generators.five_scenarios_single_pedestrian import FiveScenariosSinglePedestrian
 
     def add_cli_args(parser):
-        parser = km.karma.Karma.add_cli_args(parser)
+        """Add command line arguments for generating datasets.
 
-        # TODO: this can depend on the requested type of dataset in the future
-        parser = BinarySinglePedestrian.add_cli_args(parser)
+        :param parser: command line parser
+        :type parser: argparse.ArgumentParser
+        :return: command line parser
+        :rtype: argparse.ArgumentParser
+        """
+
+        parser.add_argument('--generator', default='binary_single_pedestrian', type=str,
+                            choices=['binary_single_pedestrian',
+                                     'five_scenarios_single_pedestrian'],
+                            help='Generator to use (default: binary_single_pedestrian).')
+
+        parser = km.karma.Karma.add_cli_args(parser)
+        parser = Generator.add_cli_args(parser)
+        # TODO: additional params can depend on the requested type of dataset in the future
 
         return parser
 
@@ -18,7 +32,10 @@ try:
         """
 
         # TODO: this can depend on the requested type of dataset in the future
-        generator = BinarySinglePedestrian(**kwargs)
+        generator = {
+            'binary_single_pedestrian': BinarySinglePedestrian,
+            'five_scenarios_single_pedestrian': FiveScenariosSinglePedestrian
+        }[kwargs.pop('generator')](**kwargs)
 
         generator.generate()
 

@@ -70,13 +70,11 @@ class FiveScenariosSinglePedestrianBatch(BatchGenerator):
             controller.update_target_speed(KarmaDataProvider.get_rng().normal(
                 profile.crossing_speed.mean, profile.crossing_speed.std))
 
-            transforms_path, lane_waypoint_idx = self.generate_path(
-                pedestrian, waypoint)
+            transforms_path = self.generate_path(pedestrian, waypoint)
             self._rotate_pedestrian_towards_location(
                 pedestrian, transforms_path[0].location)
 
             controller.update_waypoints(transforms_path)
-            controller.set_lane_waypoint_idx(lane_waypoint_idx)
 
             controllers.append(controller)
 
@@ -115,44 +113,38 @@ class FiveScenariosSinglePedestrianBatch(BatchGenerator):
     def generate_path(self, pedestrian: Walker, waypoint: carla.Waypoint) -> Tuple[List[carla.Transform], int]:
         spawn_point = pedestrian.get_transform()
         pr = KarmaDataProvider.get_rng().uniform()
-        pr_factor = 0.5
 
-        if pr < 0.2 * pr_factor:
+        if pr < 0.2:
             # Case 0: Pedestrian directly wants to cross the street:
             path = [waypoint.transform]
-            laneWaypointPos = 0
 
-        elif pr >= 0.2 * pr_factor and pr < 0.25 * pr_factor:
+        elif pr < 0.25:
             # Case 1: Pedestrian starts crossing the street and then regrets and goes back again:
             path = [waypoint.transform, spawn_point]
-            laneWaypointPos = 0
 
-        elif pr >= 0.25 * pr_factor and pr < 0.75 * pr_factor:
+        elif pr < 0.75:
             # Case 2: Pedestrian walks to a point in the path and then decides crossing the street:
             pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
             nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().uniform(
-            ) < 0.2 else KarmaDataProvider.get_closest_driving_lane_waypoint(pedNextPos.location).transform
+            ) < 0.2 else KarmaDataProvider.get_closest_driving_lane_waypoint(pedNextPos.location)
 
-            path = [pedNextPos, nextWaypoint]
-            laneWaypointPos = 1
+            path = [pedNextPos, nextWaypoint.transform]
 
-        elif pr >= 0.75 * pr_factor and pr < 0.8 * pr_factor:
+        elif pr < 0.8:
             # Case 3: Pedestrian walks to a point in the path, then decides crossing the street, and finally regrets and goes back:
             pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
             nextWaypoint = roadpos2 if KarmaDataProvider.get_rng().uniform(
-            ) < 0.2 else KarmaDataProvider.get_closest_driving_lane_waypoint(pedNextPos.location).transform
+            ) < 0.2 else KarmaDataProvider.get_closest_driving_lane_waypoint(pedNextPos.location)
 
-            path = [pedNextPos, nextWaypoint, pedNextPos]
-            laneWaypointPos = 1
+            path = [pedNextPos, nextWaypoint.transform, pedNextPos]
 
-        elif pr >= 0.8 * pr_factor:
+        else:
             # Case 4: Pedestrian walks to a point in the path and never decides to cross the street:
             pedNextPos, roadpos2 = self.get_road_parallel_path(pedestrian, waypoint)
 
             path = [pedNextPos]
-            laneWaypointPos = -1
 
-        return [path, laneWaypointPos]
+        return path
 
 
 class FiveScenariosSinglePedestrian(Generator):

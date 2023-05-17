@@ -1,0 +1,18 @@
+loglevel: 10
+outputs_dir: /app/datasets/five_scenarios_single_pedestrian/two_cameras
+number_of_clips: 1 # number of clips to generate in the dataset
+seed: 54321
+batch_size: 16 # number of clips to generate in a batch (same world, same time)
+clip_length_in_frames: 900
+generator: five_scenarios_single_pedestrian
+pedestrian_distributions:
+  # [ [ age, gender, [crossing_speed_mean, crossing_speed_std], [walking_speed_mean, walking_speed_std] ], probability ]
+  # or
+  # [ 'predefined_profile', probability ]
+  - [['adult', 'female', [1.19, 0.19], [1.45, 0.23]], 0.25]
+  - ['adult_male', 0.25]
+  - ['child_female', 0.25]
+  - ['child_male', 0.25]
+camera_distances_distributions:
+  - [[-7.0, 2.0], [0.0, 0.25], [1.0, 0.25]]
+  - [[7.0, 2.0], [0.0, 0.25], [1.0, 0.25]]

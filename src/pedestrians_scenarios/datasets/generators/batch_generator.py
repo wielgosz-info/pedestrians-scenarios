@@ -442,7 +442,7 @@ class BatchGenerator(mp.Process):
                     'frame.pedestrian.pose.world': convert_pose_dict_to_list(world_pose),
                     'frame.pedestrian.pose.component': convert_pose_dict_to_list(component_pose),
                     'frame.pedestrian.pose.relative': convert_pose_dict_to_list(relative_pose),
-                    'frame.pedestrian.is_crossing': pedestrian.is_crossing,
+                    'frame.pedestrian.is_on_driving_lane': pedestrian.is_on_driving_lane,
                 })
 
             clip_data.append(current_frame_data)
@@ -495,19 +495,15 @@ class BatchGenerator(mp.Process):
                     recorded_frames[clip_idx][manager_idx])
 
                 for camera_idx, synced_cameras in enumerate(manager.get_synchronized_cameras()):
-                    first_camera = synced_cameras[0]
+                    first_camera = synced_cameras[0][1]
 
                     # get rgb camera
-                    rgb_camera = next(
-                        (x for x in synced_cameras if x.camera_type == 'rgb'), None)
-                    if rgb_camera is not None:
-                        rgb_camera_idx = synced_cameras.index(rgb_camera)
+                    rgb_camera_idx, rgb_camera = next(
+                        (x for x in synced_cameras if x[1].camera_type == 'rgb'), (None, None))
 
                     # if semantic segmentation camera is present, we can use it to check if the pedestrians are visible
-                    semantic_camera = next(
-                        (x for x in synced_cameras if x.camera_type == 'semantic_segmentation'), None)
-                    if semantic_camera is not None:
-                        semantic_camera_idx = synced_cameras.index(semantic_camera)
+                    semantic_camera_idx, semantic_camera = next(
+                        (x for x in synced_cameras if x[1].camera_type == 'semantic_segmentation'), (None, None))
 
                     # TODO: Some of the cameras can move (e.g. attached to a vehicle), so camera position should be per frame
                     # but for now we assume only FreeCameras that are static
@@ -534,7 +530,7 @@ class BatchGenerator(mp.Process):
                             frame = [{
                                 'frame.pedestrian.id': p.id,
                                 'world.frame': world_frame
-                            } for p in range(len(clip_pedestrians))]
+                            } for p in clip_pedestrians]
 
                         for pedestrian_idx, (profile, model, spawn_point, pedestrian) in enumerate(zip(clip_profiles, clip_models, clip_spawn_points, clip_pedestrians)):
                             assert frame[pedestrian_idx]['frame.pedestrian.id'] == pedestrian.id, 'Pedestrian ID mismatch'

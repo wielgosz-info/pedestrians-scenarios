@@ -19,7 +19,6 @@ class BasicPedestrianControl(PedestrianControl):
         # instead we call the BasicControl one directly
         BasicControl.__init__(self, actor)
 
-        self._road_waypoint_idx = None
         self._reached_waypoints = 0
 
     def run_step(self, *args, **kwargs):
@@ -29,7 +28,7 @@ class BasicPedestrianControl(PedestrianControl):
 
         road_waypoint = KarmaDataProvider.get_map().get_waypoint(
             self._actor.get_location(), project_to_road=False)
-        self._actor.is_crossing = road_waypoint is not None
+        self._actor.is_on_driving_lane = road_waypoint is not None
 
         if len(old_waypoints) != len(self._waypoints):
             self._reached_waypoints = self._reached_waypoints + 1
@@ -40,7 +39,3 @@ class BasicPedestrianControl(PedestrianControl):
         # if walker didn't reach the first waypoint when other code asks,
         # it is probably stuck somewhere, and therefore useless
         return self._reached_waypoints > 0
-
-    # TODO: remove when FiveScenarios is fixed
-    def set_lane_waypoint_idx(self, waypoint_pos):
-        self._road_waypoint_idx = waypoint_pos

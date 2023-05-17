@@ -12,7 +12,7 @@ class Walker(Actor):
             kwargs['random_location'] = False
 
         super().__init__(**kwargs)
-        self.is_crossing = False
+        self.is_on_driving_lane = False
 
     @staticmethod
     def get_model_by_age_and_gender(age, gender) -> str:

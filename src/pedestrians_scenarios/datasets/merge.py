@@ -39,12 +39,12 @@ def command(input_dirs, output_dir, **kwargs):
     for in_dir in tqdm(input_dirs, desc='Input directories'):
         df = pd.read_csv(in_dir + "/data.csv")
 
-        if 'frame.pedestrian.is_crossing' in df.columns:
-            df.loc[:, 'frame.pedestrian.is_crossing'] = df.loc[:,
-                                                               'frame.pedestrian.is_crossing'].astype(bool)
+        if 'frame.pedestrian.is_on_driving_lane' in df.columns:
+            df.loc[:, 'frame.pedestrian.is_on_driving_lane'] = df.loc[:,
+                                                               'frame.pedestrian.is_on_driving_lane'].astype(bool)
         else:
             # old datasets didn't have it
-            df['frame.pedestrian.is_crossing'] = True
+            df['frame.pedestrian.is_on_driving_lane'] = True
 
         if 'camera.width' not in df.columns:
             df['camera.width'] = 800
@@ -81,7 +81,7 @@ def command(input_dirs, output_dir, **kwargs):
     df = pd.concat(dfs)
     df.drop_duplicates(subset=['id', 'camera.idx', 'pedestrian.idx', 'frame.idx'], keep='first', inplace=True)
 
-    df['frame.pedestrian.is_crossing'].fillna(True, inplace=True)
+    df['frame.pedestrian.is_on_driving_lane'].fillna(True, inplace=True)
     df['camera.width'].fillna(800, inplace=True)
     df['camera.height'].fillna(600, inplace=True)
 

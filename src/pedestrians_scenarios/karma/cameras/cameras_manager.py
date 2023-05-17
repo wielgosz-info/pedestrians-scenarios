@@ -149,7 +149,10 @@ class CamerasManager(object):
         if session_id is None:
             session_id = str(uuid.uuid4())
 
-        for ci, camera in enumerate(self.__mp4_cameras):
+        streamed_keys = list(self.__streamed_cameras.keys())
+
+        for camera in self.__mp4_cameras:
+            ci = streamed_keys.index(camera.id)
             name = '{}-{}'.format(session_id, ci)
             container = av.open(os.path.join(self.__outputs_dir,
                                              f'{name}.mp4'), mode="w")
@@ -161,13 +164,14 @@ class CamerasManager(object):
 
             self.__mp4_containers.append((name, container, stream))
 
-        for si, camera in enumerate(self.__segmentation_cameras):
-            name = '{}-{}'.format(session_id, si+len(self.__mp4_cameras))
+        for camera in self.__segmentation_cameras:
+            si = streamed_keys.index(camera.id)
+            name = '{}-{}'.format(session_id, si)
             self.__segmentation_containers.append((name, [], []))
 
         for di, camera in enumerate(self.__dvs_cameras):
-            name = '{}-{}'.format(session_id, di +
-                                  len(self.__mp4_cameras)+len(self.__segmentation_cameras))
+            di = streamed_keys.index(camera.id)
+            name = '{}-{}'.format(session_id, di)
             self.__dvs_containers.append((name, []))
 
         self.__tick_callback_id = self.__karma.register_callback(
@@ -263,12 +267,14 @@ class CamerasManager(object):
         """
         return list(self.__streamed_cameras.values())
 
-    def get_synchronized_cameras(self) -> List[List[Camera]]:
+    def get_synchronized_cameras(self) -> List[List[Tuple[int, Camera]]]:
         """
         Returns a list of cameras that are synchronized.
         If there is no synchronization, returns empty list.
         """
+        streamed_keys = list(self.__streamed_cameras.keys())
+
         return [
-            [self.__streamed_cameras[camera_id] for camera_id in sync_group]
+            [(streamed_keys.index(camera_id), self.__streamed_cameras[camera_id]) for camera_id in sync_group]
             for sync_group in self.__synchronized_cameras
         ]

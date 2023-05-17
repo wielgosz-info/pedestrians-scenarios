@@ -4,6 +4,7 @@ import logging
 import multiprocessing as mp
 import os
 import time
+import yaml
 from typing import Iterable, Tuple
 
 import numpy as np
@@ -50,7 +51,7 @@ class Generator(object):
         os.makedirs(self._outputs_dir, exist_ok=overwrite)
 
         # handle complex config data
-        self._camera_distances_distributions = self.__parse_camera_position_distributions(
+        self._camera_distances_distributions = self.__parse_camera_distances_distributions(
             camera_distances_distributions)
         self._pedestrian_distributions = self.__parse_pedestrian_distributions(
             pedestrian_distributions)
@@ -69,7 +70,27 @@ class Generator(object):
 
         mp.set_start_method('spawn')
 
-    def __parse_camera_position_distributions(self, camera_position_distributions):
+        # Save config.yaml in the output directory
+        with open(os.path.join(self._outputs_dir, 'config.yaml'), 'w') as f:
+            yaml.dump(
+            {
+                'outputs_dir': self._outputs_dir,
+
+                'number_of_clips': self._number_of_clips,
+                'clip_length_in_frames': self._clip_length_in_frames,
+                'batch_size': self._batch_size,
+                'failure_multiplier': self._failure_multiplier,
+
+                'pedestrian_distributions': self._pedestrian_distributions,
+                
+                'camera_distances_distributions': self._camera_distances_distributions,
+                'camera_fov': self._camera_fov,
+                'camera_image_size': self._camera_image_size,
+
+                **self._kwargs
+            }, f, default_flow_style=False, sort_keys=False, indent=2)
+
+    def __parse_camera_distances_distributions(self, camera_position_distributions):
         converted_camera_position_distributions = []
         for i, camera in enumerate(camera_position_distributions):
             if len(camera) != 3:
@@ -110,7 +131,7 @@ class Generator(object):
     def add_cli_args(parser):
         subparser = parser.add_argument_group('Generator')
 
-        subparser.add_argument('--outputs_dir', default=None, type=str,
+        subparser.add_argument('--outputs_dir', default='./datasets', type=str,
                                help='Directory to store outputs (default: ./datasets).')
         subparser.add_argument('--number_of_clips', type=int, default=512,
                                help='Total number of clips to generate.')
