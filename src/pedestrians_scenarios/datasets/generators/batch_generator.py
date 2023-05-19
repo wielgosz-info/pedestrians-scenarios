@@ -1,3 +1,4 @@
+import ast
 import glob
 import logging
 import multiprocessing as mp
@@ -60,6 +61,7 @@ class BatchGenerator(mp.Process):
                  ),),
                  camera_fov: float = 90.0,
                  camera_image_size: Tuple[int, int] = (1600, 600),
+                 camera_types: Iterable[str] = ('rgb', 'semantic_segmentation', 'dvs'),
                  waypoint_jitter_scale: float = 1.0,
                  **kwargs) -> None:
         super().__init__(
@@ -82,10 +84,33 @@ class BatchGenerator(mp.Process):
         self._clip_length_in_frames = clip_length_in_frames
         self._camera_fov = camera_fov
         self._camera_image_size = camera_image_size
+        self._camera_types = camera_types
+
         self._waypoint_jitter_scale = waypoint_jitter_scale
 
         self._karma = None
         self._kwargs = kwargs
+
+    @staticmethod
+    def add_cli_args(parser):
+        subparser = parser.add_argument_group('Batch Generator')
+
+        subparser.add_argument('--clip_length_in_frames', type=int, default=900,
+                               help='Length of each clip in frames.')
+
+        subparser.add_argument('--camera_fov', type=float, default=90.0,
+                               help='Camera horizontal FOV in degrees.')
+        subparser.add_argument('--camera_image_size', type=ast.literal_eval, default='(1600,600)',
+                               help='Camera image size in pixels as a (width, height) tuple (default: (1600,600)).')
+        subparser.add_argument('--camera_types', type=ast.literal_eval, default='("rgb", "semantic_segmentation", "dvs")',
+                               help='Camera types as a tuple of strings (default: ("rgb", "semantic_segmentation", "dvs")).')
+
+        subparser.add_argument('--waypoint_jitter_scale', type=float,
+                               default=1.0, help='Scale of jitter applied to waypoints.')
+
+        # pedestrian_distributions and camera_distances_distributions are only possible to set in the config file
+
+        return parser
 
     def run(self) -> None:
         no_of_generated_clips = 0
@@ -312,6 +337,7 @@ class BatchGenerator(mp.Process):
                 cameras=zip(camera_look_at, camera_distances),
                 image_size=self._camera_image_size,
                 fov=self._camera_fov,
+                camera_types=self._camera_types,
             )
             return [manager, ]
         else:

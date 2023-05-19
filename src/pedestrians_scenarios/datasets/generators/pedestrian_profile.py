@@ -9,11 +9,10 @@ PedestrianProfile = namedtuple(
     ])
 
 
-# Create some default profiles; those are up for revision
-# somewhat based on what's found in doi:10.1016/j.sbspro.2013.11.160
-
-
 class ExamplePedestrianProfiles(Enum):
+    # Create some default profiles; those are up for revision
+    # somewhat based on what's found in doi:10.1016/j.sbspro.2013.11.160
+
     adult_female = PedestrianProfile('adult', 'female', StandardDistribution(
         1.19, 0.19), StandardDistribution(1.45, 0.23))
     adult_male = PedestrianProfile('adult', 'male', StandardDistribution(

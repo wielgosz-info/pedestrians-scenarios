@@ -23,7 +23,7 @@ class Generator(object):
     def __init__(self,
                  outputs_dir: str = './datasets',
                  number_of_clips: int = 512,
-                 clip_length_in_frames: int = 900,
+                 batch_size: int = 1,
                  pedestrian_distributions: Iterable[Tuple[PedestrianProfile, float]] = (
                      (ExamplePedestrianProfiles.adult_female.value, 0.25),
                      (ExamplePedestrianProfiles.adult_male.value, 0.25),
@@ -35,9 +35,6 @@ class Generator(object):
                      StandardDistribution(0.0, 0.25),
                      StandardDistribution(1.0, 0.25)
                  ),),
-                 batch_size: int = 1,
-                 camera_fov: float = 90.0,
-                 camera_image_size: Tuple[int, int] = (1600, 600),
                  failure_multiplier: int = 2,
                  overwrite: bool = False,
                  **kwargs
@@ -57,10 +54,7 @@ class Generator(object):
             pedestrian_distributions)
 
         self._number_of_clips = number_of_clips
-        self._clip_length_in_frames = clip_length_in_frames
         self._batch_size = batch_size
-        self._camera_fov = camera_fov
-        self._camera_image_size = camera_image_size
 
         self._total_batches = np.ceil(
             self._number_of_clips/self._batch_size).astype(int)
@@ -73,22 +67,18 @@ class Generator(object):
         # Save config.yaml in the output directory
         with open(os.path.join(self._outputs_dir, 'config.yaml'), 'w') as f:
             yaml.dump(
-            {
-                'outputs_dir': self._outputs_dir,
+                {
+                    'outputs_dir': self._outputs_dir,
 
-                'number_of_clips': self._number_of_clips,
-                'clip_length_in_frames': self._clip_length_in_frames,
-                'batch_size': self._batch_size,
-                'failure_multiplier': self._failure_multiplier,
+                    'number_of_clips': self._number_of_clips,
+                    'batch_size': self._batch_size,
+                    'failure_multiplier': self._failure_multiplier,
 
-                'pedestrian_distributions': self._pedestrian_distributions,
-                
-                'camera_distances_distributions': self._camera_distances_distributions,
-                'camera_fov': self._camera_fov,
-                'camera_image_size': self._camera_image_size,
+                    'pedestrian_distributions': self._pedestrian_distributions,
+                    'camera_distances_distributions': self._camera_distances_distributions,
 
-                **self._kwargs
-            }, f, default_flow_style=False, sort_keys=False, indent=2)
+                    **self._kwargs
+                }, f, default_flow_style=False, sort_keys=False, indent=2)
 
     def __parse_camera_distances_distributions(self, camera_position_distributions):
         converted_camera_position_distributions = []
@@ -127,27 +117,21 @@ class Generator(object):
                     ), weight))
         return converted_pedestrian_distributions
 
-    @staticmethod
-    def add_cli_args(parser):
+    @classmethod
+    def add_cli_args(cls, parser):
         subparser = parser.add_argument_group('Generator')
 
         subparser.add_argument('--outputs_dir', default='./datasets', type=str,
                                help='Directory to store outputs (default: ./datasets).')
         subparser.add_argument('--number_of_clips', type=int, default=512,
                                help='Total number of clips to generate.')
-        subparser.add_argument('--clip_length_in_frames', type=int, default=900,
-                               help='Length of each clip in frames.')
         subparser.add_argument('--batch_size', type=int, default=1,
                                help='Number of clips in each batch.')
-        subparser.add_argument('--camera_fov', type=float, default=90.0,
-                               help='Camera horizontal FOV in degrees.')
-        subparser.add_argument('--camera_image_size', type=ast.literal_eval, default='(1600,600)',
-                               help='Camera image size in pixels as a (width, height) tuple (default: (1600,600)).')
-        subparser.add_argument('--waypoint_jitter_scale', type=float,
-                               default=1.0, help='Scale of jitter applied to waypoints.')
         subparser.add_argument('--failure_multiplier', type=int,
                                default=2, help='Multiplier for number of clips to generate in case of failure.')
         subparser.add_argument('--overwrite', action='store_true', default=False)
+
+        cls.batch_generator.add_cli_args(parser)
 
         return parser
 
@@ -179,11 +163,8 @@ class Generator(object):
                     queue=results_queue,
                     batch_idx=batch_idx,
                     batch_size=self._batch_size,
-                    clip_length_in_frames=self._clip_length_in_frames,
                     pedestrian_distributions=self._pedestrian_distributions,
                     camera_distances_distributions=self._camera_distances_distributions,
-                    camera_fov=self._camera_fov,
-                    camera_image_size=self._camera_image_size,
                     **{
                         **self._kwargs,
                         'seed': seed + batch_idx if seed is not None else None
