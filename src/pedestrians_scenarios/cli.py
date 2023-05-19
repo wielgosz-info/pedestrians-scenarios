@@ -9,6 +9,7 @@ except ImportError:
     from yaml import Loader
 
 from pedestrians_scenarios import __version__
+from pedestrians_scenarios.utils import setup_logging
 from pedestrians_scenarios.datasets.cli import add_datasets_cli_args
 
 
@@ -60,18 +61,6 @@ def add_common_subcommand_args(parser):
     )
 
     return parser
-
-
-def setup_logging(loglevel):
-    """Setup basic logging
-
-    :param loglevel: Minimum loglevel for emitting messages.
-    :type loglevel: int
-    """
-    logformat = "[%(asctime)s] %(levelname)s:%(name)s:%(message)s"
-    logging.basicConfig(
-        level=loglevel, stream=sys.stdout, format=logformat, datefmt="%Y-%m-%d %H:%M:%S"
-    )
 
 
 def main(args):

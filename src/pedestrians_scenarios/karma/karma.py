@@ -106,7 +106,7 @@ class Karma(object):
     def tick(self) -> int:
         return self.__world.tick()
 
-    def reset_world(self, map_name=None):
+    def reset_world(self, map_name=None, weather=None):
         if self.__world is not None:
             prev_id = self.__world.id
             prev_name = KarmaDataProvider.get_map().name
@@ -163,6 +163,10 @@ class Karma(object):
         settings.deterministic_ragdolls = True
         self.__world.apply_settings(settings)
         logging.getLogger(__name__).debug(f'World settings applied: {settings}.')
+
+        if weather is not None:
+            self.__world.set_weather(weather)
+            logging.getLogger(__name__).debug(f'Weather set to {weather}.')
 
         self.__world.set_pedestrians_seed(self.__seed)
         logging.getLogger(__name__).debug('Pedestrians seed set.')

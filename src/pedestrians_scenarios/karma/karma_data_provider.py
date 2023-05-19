@@ -29,6 +29,7 @@ class KarmaDataProvider(CarlaDataProvider):
     _pedestrian_spawn_points = None
 
     _available_maps = None
+    _available_weather_profiles = None
 
     @staticmethod
     def get_blueprint_library() -> carla.BlueprintLibrary:
@@ -272,3 +273,30 @@ class KarmaDataProvider(CarlaDataProvider):
                 f'Available maps: {KarmaDataProvider._available_maps}')
 
         return KarmaDataProvider._available_maps
+
+    @staticmethod
+    def get_available_weather_profiles():
+        """
+        Get available weather profiles.
+        """
+        if not KarmaDataProvider._available_weather_profiles:
+            KarmaDataProvider._available_weather_profiles = {
+                'ClearNoon': carla.WeatherParameters.ClearNoon,
+                'CloudyNoon': carla.WeatherParameters.CloudyNoon,
+                'WetNoon': carla.WeatherParameters.WetNoon,
+                'WetCloudyNoon': carla.WeatherParameters.WetCloudyNoon,
+                'SoftRainNoon': carla.WeatherParameters.SoftRainNoon,
+                'MidRainyNoon': carla.WeatherParameters.MidRainyNoon,
+                'HardRainNoon': carla.WeatherParameters.HardRainNoon,
+                'ClearSunset': carla.WeatherParameters.ClearSunset,
+                'CloudySunset': carla.WeatherParameters.CloudySunset,
+                'WetSunset': carla.WeatherParameters.WetSunset,
+                'WetCloudySunset': carla.WeatherParameters.WetCloudySunset,
+                'SoftRainSunset': carla.WeatherParameters.SoftRainSunset,
+                'MidRainSunset': carla.WeatherParameters.MidRainSunset,
+                'HardRainSunset': carla.WeatherParameters.HardRainSunset,
+            }
+            logging.getLogger(__name__).debug(
+                f'Available weather profiles: {KarmaDataProvider._available_weather_profiles}')
+
+        return KarmaDataProvider._available_weather_profiles

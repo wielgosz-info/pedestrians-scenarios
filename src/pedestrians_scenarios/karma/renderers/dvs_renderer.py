@@ -61,4 +61,3 @@ class DVSRenderer(SegmentationRenderer):
 
         if img_frame is not None:
             super().save(img_frame, name=name, outputs_dir=outputs_dir, fps=fps)
-

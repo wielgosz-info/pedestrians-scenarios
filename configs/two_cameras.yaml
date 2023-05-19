@@ -1,9 +1,8 @@
-loglevel: 10
-outputs_dir: /app/datasets/five_scenarios_single_pedestrian/two_cameras
+outputs_dir: /outputs/datasets/five_scenarios_single_pedestrian/two_cameras
 generator: five_scenarios_single_pedestrian
 number_of_clips: 1 # number of clips to generate in the dataset
 seed: 54321
-batch_size: 4 # number of clips to generate in a batch (same world, same time)
+batch_size: 1 # number of clips to generate in a batch (same world, same time)
 clip_length_in_frames: 300
 pedestrian_distributions:
   # [ [ age, gender, [crossing_speed_mean, crossing_speed_std], [walking_speed_mean, walking_speed_std] ], probability ]
@@ -18,6 +17,19 @@ camera_distances_distributions:
   - [[7.0, 2.0], [0.0, 0.25], [1.0, 0.25]]
 camera_types:
   - rgb
-  - dvs
   - semantic_segmentation
-  
+  - dvs
+weather_whitelist:
+  - SoftRainNoon
+  - MidRainyNoon
+  - HardRainNoon
+  - SoftRainSunset
+  - MidRainSunset
+  - HardRainSunset
+maps_whitelist:
+  - /Game/Carla/Maps/Town01
+  - /Game/Carla/Maps/Town02
+  - /Game/Carla/Maps/Town03
+  - /Game/Carla/Maps/Town04
+  - /Game/Carla/Maps/Town05
+  - /Game/Carla/Maps/Town10HD

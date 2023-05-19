@@ -11,6 +11,7 @@ from PIL import Image
 import carla
 import numpy as np
 import pandas as pd
+from pedestrians_scenarios.utils import setup_logging
 from pedestrians_scenarios.karma.cameras import CamerasManager
 from pedestrians_scenarios.karma.karma import Karma, KarmaStage
 from pedestrians_scenarios.karma.karma_data_provider import KarmaDataProvider
@@ -63,6 +64,8 @@ class BatchGenerator(mp.Process):
                  camera_image_size: Tuple[int, int] = (1600, 600),
                  camera_types: Iterable[str] = ('rgb', 'semantic_segmentation', 'dvs'),
                  waypoint_jitter_scale: float = 1.0,
+                 maps_whitelist: Iterable[str] = None,
+                 weather_whitelist: Iterable[str] = None,
                  **kwargs) -> None:
         super().__init__(
             group=kwargs.get('group', None),
@@ -87,9 +90,17 @@ class BatchGenerator(mp.Process):
         self._camera_types = camera_types
 
         self._waypoint_jitter_scale = waypoint_jitter_scale
+        self._maps_whitelist = set(
+            maps_whitelist) if maps_whitelist is not None else None
+        self._weather_whitelist = set(
+            weather_whitelist) if weather_whitelist is not None else None
 
         self._karma = None
         self._kwargs = kwargs
+
+        # set loglevel if specified
+        if 'loglevel' in kwargs:
+            setup_logging(kwargs['loglevel'])
 
     @staticmethod
     def add_cli_args(parser):
@@ -108,7 +119,8 @@ class BatchGenerator(mp.Process):
         subparser.add_argument('--waypoint_jitter_scale', type=float,
                                default=1.0, help='Scale of jitter applied to waypoints.')
 
-        # pedestrian_distributions and camera_distances_distributions are only possible to set in the config file
+        # only possible to set in the config file:
+        # pedestrian_distributions, camera_distances_distributions, weather_whitelist, maps_whitelist
 
         return parser
 
@@ -117,7 +129,8 @@ class BatchGenerator(mp.Process):
         with Karma(**self._kwargs) as karma:
             self._karma = karma
             map_name = self.get_map_for_batch()
-            karma.reset_world(map_name)
+            weather = self.get_weather_for_batch()
+            karma.reset_world(map_name, weather)
 
             batch_data, no_of_generated_clips = self.generate_batch(map_name)
             if no_of_generated_clips > 0:
@@ -343,11 +356,24 @@ class BatchGenerator(mp.Process):
         else:
             return []
 
+    def get_weather_for_batch(self) -> carla.WeatherParameters:
+        """
+        Get the weather for a batch.
+        """
+        weather_profiles = KarmaDataProvider.get_available_weather_profiles()
+        keys = list(weather_profiles.keys())
+        if self._weather_whitelist is not None:
+            keys = list(set(keys).intersection(self._weather_whitelist))
+        return weather_profiles[KarmaDataProvider.get_rng().choice(keys)]
+
     def get_map_for_batch(self) -> str:
         """
         Get the map for a batch. All pedestrians in batch will be spawned in the same world at the same time.
         """
-        return KarmaDataProvider.get_rng().choice(KarmaDataProvider.get_available_maps())
+        maps = KarmaDataProvider.get_available_maps()
+        if self._maps_whitelist is not None:
+            maps = list(set(maps).intersection(self._maps_whitelist))
+        return KarmaDataProvider.get_rng().choice(maps)
 
     def generate_batch(self, map_name: str) -> Iterable[Dict]:
         """
