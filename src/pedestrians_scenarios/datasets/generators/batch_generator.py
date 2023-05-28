@@ -92,8 +92,9 @@ class BatchGenerator(mp.Process):
         self._waypoint_jitter_scale = waypoint_jitter_scale
         self._maps_whitelist = set(
             maps_whitelist) if maps_whitelist is not None else None
-        self._weather_whitelist = set(
-            weather_whitelist) if weather_whitelist is not None else None
+
+        self._custom_weather_profiles, self._weather_whitelist = self.__prepare_weather_profiles(
+            weather_whitelist)
 
         self._karma = None
         self._kwargs = kwargs
@@ -101,6 +102,24 @@ class BatchGenerator(mp.Process):
         # set loglevel if specified
         if 'loglevel' in kwargs:
             setup_logging(kwargs['loglevel'])
+
+    def __prepare_weather_profiles(self, weather_whitelist) -> None:
+        if weather_whitelist is None:
+            return None, None
+
+        custom_weather_profiles = {}
+        profile_keys = []
+
+        for idx, weather_profile in enumerate(weather_whitelist):
+            if isinstance(weather_profile, str):
+                profile_keys.append(weather_profile)
+            elif isinstance(weather_profile, dict):
+                name = weather_profile.pop('name', f'CustomWeatherProfile_{idx}')
+                profile_keys.append(name)
+                # we cannot construct the profile here because it will not pass to subprocess
+                custom_weather_profiles[name] = weather_profile
+
+        return custom_weather_profiles, set(profile_keys)
 
     @staticmethod
     def add_cli_args(parser):
@@ -361,6 +380,12 @@ class BatchGenerator(mp.Process):
         Get the weather for a batch.
         """
         weather_profiles = KarmaDataProvider.get_available_weather_profiles()
+
+        # merge with custom weather profiles
+        if self._custom_weather_profiles is not None:
+            weather_profiles.update({k: carla.WeatherParameters(**p)
+                                     for k, p in self._custom_weather_profiles.items()})
+
         keys = list(weather_profiles.keys())
         if self._weather_whitelist is not None:
             keys = list(set(keys).intersection(self._weather_whitelist))

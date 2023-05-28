@@ -59,6 +59,302 @@ python -m pedestrians_scenarios datasets generate \
     --failure_multiplier 8
 ```
 
+##### Selected config-file-only options
+
+- `camera_distances_distributions` Distribution of camera(s) distance from the observable point. By default, a single camera with `[x,y,z]` distribution of `[[-7.0, 2.0], [0.0, 0.25], [1.0, 0.25]]` is used, where each coordinate is a `[mean, std]` pair.
+- `pedestrian_distributions` Distribution of pedestrians. Each item in the list describes a probability of a given pedestrian type to be spawned. By default, the four example pedestrians are used with equal probability:
+
+    ```yaml
+    ...
+    pedestrian_distributions:
+      - ['adult_male', 0.25]
+      - ['adult_female', 0.25]
+      - ['child_male', 0.25]
+      - ['child_female', 0.25]
+    ...
+    ```
+
+    Default pedestrian profiles are defined in [src/pedestrians_scenarios/datasets/generators/pedestrian_profile.py](https://github.com/wielgosz-info/pedestrians-scenarios/blob/main/src/pedestrians_scenarios/datasets/generators/pedestrian_profile.py). It is also possible to define custom profiles directly in the config file:
+
+    ```yaml
+    ...
+    pedestrian_distributions:
+      # [ [ age, gender, [crossing_speed_mean, crossing_speed_std], [walking_speed_mean, walking_speed_std] ], probability ]
+      - [['adult', 'female', [1.19, 0.19], [1.45, 0.23]], 0.25]
+    ...
+    ```
+
+- `weather_whitelist` List of allowed weather parameters. If empty/skipped, all weather parameters are allowed. Each entry can be af string preset or an explicit object following [carla.WeatherParameters](https://carla.readthedocs.io/en/0.9.13/python_api/#carlaweatherparameters). Also helpful can be the [dynamic weather example](https://github.com/carla-simulator/carla/blob/master/PythonAPI/examples/dynamic_weather.py) from CARLA's PythonAPI examples, however current implementation of the generator assumes static weather parameters for the whole clip.
+
+    Example config file:
+
+    ```yaml
+    ...
+    weather_whitelist:
+      - ClearNoon
+      - CloudyNoon
+      - WetNoon
+      - name: CustomAfterRainNoon  # the name is an optional (but recommended) field
+        cloudiness: 15.000000
+        precipitation: 0.000000
+        precipitation_deposits: 30.000000
+        wind_intensity: 10.000000
+        sun_azimuth_angle: -1.000000
+        sun_altitude_angle: 45.000000
+        fog_density: 2.000000
+        fog_distance: 0.750000
+        fog_falloff: 0.100000
+        wetness: 30.000000
+        scattering_intensity: 1.000000
+        mie_scattering_scale: 0.030000
+        rayleigh_scattering_scale: 0.033100
+    ...
+    ```
+
+    Please note that if you want to use custom weather presets in addition to the default ones, you need to explicitly list **all of them** in the config file:
+
+    ```yaml
+    ...
+    weather_whitelist:
+      - ClearNoon
+      - CloudyNoon
+      - WetNoon
+      - WetCloudyNoon
+      - SoftRainNoon
+      - MidRainyNoon
+      - HardRainNoon
+      - ClearSunset
+      - CloudySunset
+      - WetSunset
+      - WetCloudySunset
+      - SoftRainSunset
+      - MidRainSunset
+      - HardRainSunset
+      - name: CustomAfterRainAfterNoon
+        cloudiness: ...
+    ...
+    ```
+    
+    Following are the available default presets parameters (as of CARLA 0.9.13):
+
+    ```yaml
+    - name: ClearNoon
+      cloudiness: 5.000000
+      precipitation: 0.000000
+      precipitation_deposits: 0.000000
+      wind_intensity: 10.000000
+      sun_azimuth_angle: -1.000000
+      sun_altitude_angle: 45.000000
+      fog_density: 2.000000
+      fog_distance: 0.750000
+      fog_falloff: 0.100000
+      wetness: 0.000000
+      scattering_intensity: 1.000000
+      mie_scattering_scale: 0.030000
+      rayleigh_scattering_scale: 0.033100
+    - name: CloudyNoon
+      cloudiness: 60.000000
+      cloudiness: 60.000000
+      precipitation: 0.000000
+      precipitation_deposits: 0.000000
+      wind_intensity: 10.000000
+      sun_azimuth_angle: -1.000000
+      sun_altitude_angle: 45.000000
+      fog_density: 3.000000
+      fog_distance: 0.750000
+      fog_falloff: 0.100000
+      wetness: 0.000000
+      scattering_intensity: 1.000000
+      mie_scattering_scale: 0.030000
+      rayleigh_scattering_scale: 0.033100
+    - name: WetNoon
+      cloudiness: 5.000000
+      precipitation: 0.000000
+      precipitation_deposits: 50.000000
+      wind_intensity: 10.000000
+      sun_azimuth_angle: -1.000000
+      sun_altitude_angle: 45.000000
+      fog_density: 3.000000
+      fog_distance: 0.750000
+      fog_falloff: 0.100000
+      wetness: 0.000000
+      scattering_intensity: 1.000000
+      mie_scattering_scale: 0.030000
+      rayleigh_scattering_scale: 0.033100
+    - name: WetCloudyNoon
+      cloudiness: 60.000000
+      cloudiness: 60.000000
+      precipitation: 0.000000
+      precipitation_deposits: 50.000000
+      wind_intensity: 10.000000
+      sun_azimuth_angle: -1.000000
+      sun_altitude_angle: 45.000000
+      fog_density: 3.000000
+      fog_distance: 0.750000
+      fog_falloff: 0.100000
+      wetness: 0.000000
+      scattering_intensity: 1.000000
+      mie_scattering_scale: 0.030000
+      rayleigh_scattering_scale: 0.033100
+    - name: SoftRainNoon
+      cloudiness: 20.000000
+      cloudiness: 20.000000
+      precipitation: 30.000000
+      precipitation_deposits: 50.000000
+      wind_intensity: 30.000000
+      sun_azimuth_angle: -1.000000
+      sun_altitude_angle: 45.000000
+      fog_density: 3.000000
+      fog_distance: 0.750000
+      fog_falloff: 0.100000
+      wetness: 0.000000
+      scattering_intensity: 1.000000
+      mie_scattering_scale: 0.030000
+      rayleigh_scattering_scale: 0.033100
+    - name: MidRainyNoon
+      cloudiness: 60.000000
+      cloudiness: 60.000000
+      precipitation: 60.000000
+      precipitation_deposits: 60.000000
+      wind_intensity: 60.000000
+      sun_azimuth_angle: -1.000000
+      sun_altitude_angle: 45.000000
+      fog_density: 3.000000
+      fog_distance: 0.750000
+      fog_falloff: 0.100000
+      wetness: 0.000000
+      scattering_intensity: 1.000000
+      mie_scattering_scale: 0.030000
+      rayleigh_scattering_scale: 0.033100
+    - name: HardRainNoon
+      cloudiness: 100.000000
+      cloudiness: 100.000000
+      precipitation: 100.000000
+      precipitation_deposits: 90.000000
+      wind_intensity: 100.000000
+      sun_azimuth_angle: -1.000000
+      sun_altitude_angle: 45.000000
+      fog_density: 7.000000
+      fog_distance: 0.750000
+      fog_falloff: 0.100000
+      wetness: 0.000000
+      scattering_intensity: 1.000000
+      mie_scattering_scale: 0.030000
+      rayleigh_scattering_scale: 0.033100
+    - name: ClearSunset
+      cloudiness: 5.000000
+      precipitation: 0.000000
+      precipitation_deposits: 0.000000
+      wind_intensity: 10.000000
+      sun_azimuth_angle: -1.000000
+      sun_altitude_angle: 15.000000
+      fog_density: 2.000000
+      fog_distance: 0.750000
+      fog_falloff: 0.100000
+      wetness: 0.000000
+      scattering_intensity: 1.000000
+      mie_scattering_scale: 0.030000
+      rayleigh_scattering_scale: 0.033100
+    - name: CloudySunset
+      cloudiness: 60.000000
+      precipitation: 0.000000
+      precipitation_deposits: 0.000000
+      wind_intensity: 10.000000
+      sun_azimuth_angle: -1.000000
+      sun_altitude_angle: 15.000000
+      fog_density: 3.000000
+      fog_distance: 0.750000
+      fog_falloff: 0.100000
+      wetness: 0.000000
+      scattering_intensity: 1.000000
+      mie_scattering_scale: 0.030000
+      rayleigh_scattering_scale: 0.033100
+    - name: WetSunset
+      cloudiness: 5.000000
+      precipitation: 0.000000
+      precipitation_deposits: 50.000000
+      wind_intensity: 10.000000
+      sun_azimuth_angle: -1.000000
+      sun_altitude_angle: 15.000000
+      fog_density: 2.000000
+      fog_distance: 0.750000
+      fog_falloff: 0.100000
+      wetness: 0.000000
+      scattering_intensity: 1.000000
+      mie_scattering_scale: 0.030000
+      rayleigh_scattering_scale: 0.033100
+    - name: WetCloudySunset
+      cloudiness: 60.000000
+      precipitation: 0.000000
+      precipitation_deposits: 50.000000
+      wind_intensity: 10.000000
+      sun_azimuth_angle: -1.000000
+      sun_altitude_angle: 15.000000
+      fog_density: 2.000000
+      fog_distance: 0.750000
+      fog_falloff: 0.100000
+      wetness: 0.000000
+      scattering_intensity: 1.000000
+      mie_scattering_scale: 0.030000
+      rayleigh_scattering_scale: 0.033100
+    - name: SoftRainSunset
+      cloudiness: 20.000000
+      precipitation: 30.000000
+      precipitation_deposits: 50.000000
+      wind_intensity: 30.000000
+      sun_azimuth_angle: -1.000000
+      sun_altitude_angle: 15.000000
+      fog_density: 2.000000
+      fog_distance: 0.750000
+      fog_falloff: 0.100000
+      wetness: 0.000000
+      scattering_intensity: 1.000000
+      mie_scattering_scale: 0.030000
+      rayleigh_scattering_scale: 0.033100
+    - name: MidRainSunset
+      cloudiness: 60.000000
+      precipitation: 60.000000
+      precipitation_deposits: 60.000000
+      wind_intensity: 60.000000
+      sun_azimuth_angle: -1.000000
+      sun_altitude_angle: 15.000000
+      fog_density: 3.000000
+      fog_distance: 0.750000
+      fog_falloff: 0.100000
+      wetness: 0.000000
+      scattering_intensity: 1.000000
+      mie_scattering_scale: 0.030000
+      rayleigh_scattering_scale: 0.033100
+    - name: HardRainSunset
+      cloudiness: 100.000000
+      precipitation: 100.000000
+      precipitation_deposits: 90.000000
+      wind_intensity: 100.000000
+      sun_azimuth_angle: -1.000000
+      sun_altitude_angle: 15.000000
+      fog_density: 7.000000
+      fog_distance: 0.750000
+      fog_falloff: 0.100000
+      wetness: 0.000000
+      scattering_intensity: 1.000000
+      mie_scattering_scale: 0.030000
+      rayleigh_scattering_scale: 0.033100
+    ```
+
+- `maps_whitelist` List of allowed maps. By default, all maps are allowed. Example:
+
+    ```yaml
+    ...
+    maps_whitelist:
+      - /Game/Carla/Maps/Town01
+      - /Game/Carla/Maps/Town02
+      - /Game/Carla/Maps/Town03
+      - /Game/Carla/Maps/Town04
+      - /Game/Carla/Maps/Town05
+      - /Game/Carla/Maps/Town10HD
+    ...
+    ```
+
 #### `datasets merge`
 
 Allows to merge multiple datasets into one, ensuring that the clip IDs are unique.

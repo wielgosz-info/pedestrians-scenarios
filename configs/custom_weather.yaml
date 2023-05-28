@@ -1,0 +1,35 @@
+loglevel: 10
+outputs_dir: /outputs/datasets/five_scenarios_single_pedestrian/custom_weather
+generator: five_scenarios_single_pedestrian
+number_of_clips: 3
+batch_size: 1
+clip_length_in_frames: 900
+weather_whitelist:
+  # - ClearNoon
+  # - CloudyNoon
+  # - WetNoon
+  # - WetCloudyNoon
+  # - SoftRainNoon
+  # - MidRainyNoon
+  # - HardRainNoon
+  # - ClearSunset
+  # - CloudySunset
+  # - WetSunset
+  # - WetCloudySunset
+  # - SoftRainSunset
+  # - MidRainSunset
+  # - HardRainSunset
+  - name: CustomAfterRainAfterNoon
+    cloudiness: 15.000000
+    precipitation: 0.000000
+    precipitation_deposits: 80.000000
+    wind_intensity: 20.000000
+    sun_azimuth_angle: 60.000000
+    sun_altitude_angle: 30.000000
+    fog_density: 2.000000
+    fog_distance: 0.750000
+    fog_falloff: 0.100000
+    wetness: 30.000000
+    scattering_intensity: 1.000000
+    mie_scattering_scale: 0.030000
+    rayleigh_scattering_scale: 0.033100
