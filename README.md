@@ -1,7 +1,7 @@
 # Pedestrians Scenarios
 
 This is a part of the bigger project to bring the more realistic pedestrian movements to CARLA.
-It isn't intended for fully standalone use.To generate PedSynth++/pedestrian scenrios with more diversity and multiple weather/traffic conditions use [PedSynth++ README.md] () Please see the [main project README.md](https://github.com/wielgosz-info/carla-pedestrians/blob/main/README.md) or [Adversarial Cases for Autonomous Vehicles (ARCANE) project website](https://project-arcane.eu/) for details.
+It isn't intended for fully standalone use.To generate PedSynth++/pedestrian scenrios with more diversity and multiple weather/traffic conditions use [PedSynth++ README.md](https://github.com/wielgosz-info/pedestrians-scenarios/blob/main/src/pedestrians_scenarios/scenarios/README.md) Please see the [main project README.md](https://github.com/wielgosz-info/carla-pedestrians/blob/main/README.md) or [Adversarial Cases for Autonomous Vehicles (ARCANE) project website](https://project-arcane.eu/) for details.
 
 ## Setup
 
