@@ -90,3 +90,7 @@ FROM scenarios-${PLATFORM} as scenarios
 
 # Copy all project files into container
 COPY --chown=${USERNAME}:${USERNAME} . /app
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
