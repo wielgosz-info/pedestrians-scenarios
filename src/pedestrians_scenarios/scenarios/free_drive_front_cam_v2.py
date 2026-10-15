@@ -312,6 +312,7 @@ class FreeDriveFrontCamScenario:
         self.vehicle: Optional[carla.Actor] = None
         self.camera: Optional[carla.Actor] = None
         self.lidar: Optional[carla.Actor] = None  # ADD THIS for LIDAR
+        self.lidar_mount: Optional[carla.Transform] = None
         self.dvs_camera: Optional[carla.Actor] = None  # ADD THIS for DVS_driver_eye_transform
         self.original_settings: Optional[carla.WorldSettings] = None
         self.walkers: List[carla.Actor] = []
@@ -325,6 +326,8 @@ class FreeDriveFrontCamScenario:
 
         # Labeling variables
         self.labels: List[PedestrianLabel] = []
+        self.pedestrian_3d_rows: List[List] = []
+        self.ego_pose_rows: List[List] = []
         self.video_id: str = ""
         self.scenario_config: Optional[ScenarioConfig] = None
         self.next_pedestrian_id = 1
@@ -1546,6 +1549,52 @@ class FreeDriveFrontCamScenario:
 
         except Exception as e:
             print(f"[scenario] Error saving labels: {e}")
+
+    def _capture_geometry(self, frame_id: int, snapshot):
+        """Record actor ground truth from one CARLA simulation frame."""
+        ego = snapshot.find(self.vehicle.id)
+        if ego is None:
+            raise RuntimeError(f"Ego missing from CARLA frame {snapshot.frame}")
+        pose = ego.get_transform()
+        p, r = pose.location, pose.rotation
+        self.ego_pose_rows.append([
+            self.video_id, frame_id, snapshot.frame,
+            p.x, p.y, p.z, r.roll, r.pitch, r.yaw,
+        ])
+
+        for state in self._ped_states:
+            actor = snapshot.find(state.actor.id)
+            if actor is None:
+                continue
+            transform = actor.get_transform()
+            box = state.actor.bounding_box
+            center = transform.transform(box.location)
+            extent = box.extent
+            self.pedestrian_3d_rows.append([
+                self.video_id, frame_id, snapshot.frame,
+                state.pedestrian_id, state.actor.id,
+                center.x, center.y, center.z,
+                2 * extent.x, 2 * extent.y, 2 * extent.z,
+                transform.rotation.yaw + box.rotation.yaw,
+            ])
+
+    def _save_geometry(self, output_dir: Path):
+        files = (
+            ("pedestrians_3d.csv", [
+                "video_id", "frame_id", "carla_frame", "pedestrian_id", "carla_actor_id",
+                "center_x_m", "center_y_m", "center_z_m",
+                "size_x_m", "size_y_m", "size_z_m", "yaw_deg",
+            ], self.pedestrian_3d_rows),
+            ("ego_pose.csv", [
+                "video_id", "frame_id", "carla_frame",
+                "x_m", "y_m", "z_m", "roll_deg", "pitch_deg", "yaw_deg",
+            ], self.ego_pose_rows),
+        )
+        for filename, header, rows in files:
+            with open(output_dir / filename, "w", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow(header)
+                writer.writerows(rows)
 
     def _calculate_crossing_statistics(self, labels: List[PedestrianLabel]) -> Dict:
         """Calculate crossing statistics for the dataset"""
@@ -3469,6 +3518,7 @@ class FreeDriveFrontCamScenario:
                 lidar_bp, lidar_transform, attach_to=vehicle,
                 attachment_type=carla.AttachmentType.Rigid
             )
+            self.lidar_mount = lidar_transform
 
             print(f"[scenario] LiDAR sensor configured: {self.lidar_channels} channels, {self.lidar_range}m range")
             return lidar
@@ -3569,6 +3619,14 @@ class FreeDriveFrontCamScenario:
                     "channels": self.lidar_channels if self.enable_lidar else None,
                     "range": self.lidar_range if self.enable_lidar else None,
                     "points_per_second": self.lidar_points_per_second if self.enable_lidar else None,
+                    "mount_in_ego": {
+                        "x_m": self.lidar_mount.location.x,
+                        "y_m": self.lidar_mount.location.y,
+                        "z_m": self.lidar_mount.location.z,
+                        "roll_deg": self.lidar_mount.rotation.roll,
+                        "pitch_deg": self.lidar_mount.rotation.pitch,
+                        "yaw_deg": self.lidar_mount.rotation.yaw,
+                    } if self.lidar_mount else None,
                 },
                 "dvs": {
                     "enabled": self.enable_dvs,
@@ -4554,6 +4612,10 @@ class FreeDriveFrontCamScenario:
                             pass
 
                     if frame_idx >= 5:
+                        snapshot = self.world.get_snapshot()
+                        if snapshot.frame != world_frame:
+                            raise RuntimeError(f"Expected CARLA frame {world_frame}, got {snapshot.frame}")
+                        self._capture_geometry(saved_frames, snapshot)
                         filename = f"{saved_frames:06d}.png"
                         image.save_to_disk(str(out_dir / filename))
                         if lidar_data and self.enable_lidar:
@@ -4584,6 +4646,7 @@ class FreeDriveFrontCamScenario:
 
             # Save labels
             self._save_labels(out_dir)
+            self._save_geometry(out_dir)
 
             # Encode video
             self._encode_video(out_dir, self.fps)

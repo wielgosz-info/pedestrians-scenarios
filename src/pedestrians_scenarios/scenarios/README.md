@@ -43,7 +43,10 @@ python -m pedestrians_scenarios scenarios generate \
         │   ├── ...
         │   ├── front_cam_30fps.mp4
         │   ├── labels.json
-        │   └── labels.csv
+        │   ├── labels.csv
+        │   ├── pedestrians_3d.csv
+        │   ├── ego_pose.csv
+        │   └── sensor_metadata.json
         ├── video_001/
         ├── ...
         └── video_019/
@@ -109,19 +112,27 @@ docker ps | grep carla
 Each video includes:
 - **RGB frames** (PNG images at 30 FPS)
 - **Video file** (MP4 format)
-- **Labels** (JSON and CSV formats)
-- **Pedestrian metadata** (bounding boxes, skeleton keypoints, crossing behavior)
+- **Visible pedestrian labels** (`labels.json` and `labels.csv`, including 2D boxes and crossing fields)
+- **Pedestrian 3D boxes** (`pedestrians_3d.csv`, including pedestrians outside the camera view)
+- **Ego poses** (`ego_pose.csv`, one row per saved frame)
+- **Sensor metadata** (`sensor_metadata.json`, with RGB size/FOV and the LiDAR mount when available)
 - **LiDAR data** (if enabled)
 - **DVS camera data** (if enabled)
 
-## Label Format
+## Annotation Format
 
-Each label contains:
+`labels.json` and `labels.csv` contain visible-pedestrian labels with:
 - `frame_id` - Frame number
 - `pedestrian_id` - Unique pedestrian ID
-- `bbox` - Bounding box [x_min, y_min, x_max, y_max]
-- `skeleton_keypoints` - 17 COCO keypoints
+- `bbox` - 2D bounding box [x_min, y_min, x_max, y_max] (separate columns in CSV)
 - `crossing` - 1 if crossing, 0 if not
-- `behavior_type` - normal, distracted, or potential_crosser
-- `distance_to_ego` - Distance to camera in meters
+- `crossing_point` - First crossing frame, or first visible frame if no crossing is recorded
+- `behavior_type` - Generator-assigned behavior category
+- `distance_to_ego` - Distance to the ego vehicle in meters
 - `visible` - Whether pedestrian is visible
+
+Both geometry CSVs include `video_id`, `frame_id` (the clip frame index), and `carla_frame` (the CARLA simulation frame number):
+- `pedestrians_3d.csv` - One row per live tracked pedestrian per frame, with `pedestrian_id`, `carla_actor_id`, box center (`center_x_m`, `center_y_m`, `center_z_m`), full size (`size_x_m`, `size_y_m`, `size_z_m`), and `yaw_deg`.
+- `ego_pose.csv` - One row per frame, with position (`x_m`, `y_m`, `z_m`) and orientation (`roll_deg`, `pitch_deg`, `yaw_deg`).
+
+Positions use CARLA world coordinates (X forward, Y right, Z up); sizes are in meters along the box's local axes, and angles are in degrees. The 3D box contains yaw only.
